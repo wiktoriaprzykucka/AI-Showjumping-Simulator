@@ -1,0 +1,1278 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #ebe7dc;
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-strong: rgba(255, 255, 255, 0.95);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-bright: rgba(0, 0, 0, 0.18);
+  --accent: #0a9b7e;
+  --accent-soft: rgba(10, 155, 126, 0.10);
+  --accent-glow: 0 0 24px rgba(10, 155, 126, 0.35);
+  --text: rgba(20, 20, 20, 0.95);
+  --text-dim: rgba(20, 20, 20, 0.55);
+  --text-faint: rgba(20, 20, 20, 0.35);
+  --danger: #c0392b;
+  --danger-soft: rgba(192, 57, 43, 0.08);
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  -webkit-user-select: none; user-select: none;
+}
+
+#app { position: fixed; inset: 0; }
+canvas#c { width: 100%; height: 100%; display: block; cursor: crosshair; }
+canvas#c.grab { cursor: grab; }
+canvas#c.grabbing { cursor: grabbing; }
+canvas#c.rotating { cursor: ew-resize; }
+canvas#c.orbiting { cursor: move; }
+
+/* ─── Top Bar ─────────────────────────────────────────── */
+.top-bar {
+  position: fixed; top: 14px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 9px 9px 9px 18px;
+  display: flex; align-items: center; gap: 14px;
+  z-index: 50;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+  animation: slideDown 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } }
+@keyframes slideUp   { from { opacity: 0; transform: translate(-50%, 20px); } }
+@keyframes slideRight{ from { opacity: 0; transform: translateX(20px); } }
+@keyframes pulseRing { 0%,100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.08); opacity: 0.9; } }
+@keyframes fadeIn    { from { opacity: 0; } }
+
+.brand {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 2.5px; text-transform: uppercase;
+  color: var(--accent);
+  padding-right: 14px;
+  border-right: 1px solid var(--border);
+}
+.brand-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.course-name {
+  background: transparent; border: none;
+  color: var(--text);
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 17px; font-weight: 500;
+  width: 100px;
+  outline: none;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 0.15s;
+}
+.course-name:hover { border-bottom-color: var(--border-bright); }
+.course-name:focus { border-bottom-color: var(--accent); color: var(--accent); }
+
+.params {
+  display: flex; gap: 4px;
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+}
+.chip {
+  display: flex; align-items: baseline; gap: 4px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+}
+.chip:hover { background: rgba(255,255,255,0.04); border-color: var(--border); }
+.chip-input {
+  background: transparent; border: none; outline: none;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; font-weight: 500;
+  width: 36px; padding: 0;
+  text-align: right;
+}
+.chip-input:focus { color: var(--accent); }
+.chip-suf {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px; font-weight: 500;
+  color: var(--text-faint);
+  letter-spacing: 0.5px;
+}
+
+.export-btn {
+  background: var(--accent);
+  color: #ffffff;
+  border: none;
+  padding: 8px 14px 8px 16px;
+  border-radius: 9px;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 4px 16px rgba(12, 242, 194, 0.3);
+}
+.export-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(12, 242, 194, 0.5); }
+.export-btn:active { transform: translateY(0); }
+
+/* ─── Action Dock (bottom) ─────────────────────────────── */
+.dock {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 6px;
+  display: flex; gap: 2px;
+  z-index: 50;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  animation: slideUp 0.5s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.dbtn {
+  width: 42px; height: 42px;
+  background: transparent; border: none;
+  border-radius: 9px;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+  position: relative;
+}
+.dbtn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.dbtn.active { background: var(--accent-soft); color: var(--accent); }
+.dbtn.active:hover { background: var(--accent-soft); }
+.dbtn.danger:hover { background: var(--danger-soft); color: var(--danger); }
+.dbtn svg { width: 18px; height: 18px; stroke-width: 1.8; }
+.dbtn[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 10px); left: 50%;
+  transform: translateX(-50%);
+  background: var(--glass-strong);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 11px; font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.15s;
+}
+.dbtn:hover::after { opacity: 1; }
+.divider { width: 1px; background: var(--border); margin: 6px 4px; }
+
+/* ─── Status Pill ──────────────────────────────────────── */
+.status {
+  position: fixed; top: 78px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 7px 14px;
+  font-size: 12px; font-weight: 500;
+  color: var(--text-dim);
+  z-index: 40;
+  pointer-events: none;
+  animation: slideDown 0.4s 0.2s backwards;
+}
+.status .accent { color: var(--accent); font-weight: 600; }
+
+/* ─── Selected Info Panel ──────────────────────────────── */
+.info {
+  position: fixed; right: 16px; top: 50%;
+  transform: translateY(-50%);
+  width: 220px;
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  z-index: 50;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  display: none;
+  animation: slideRight 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.info.show { display: block; }
+
+.info-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.info-num {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 28px; font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.info-label {
+  font-size: 9px; letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 3px;
+}
+
+.info-row {
+  display: flex; justify-content: space-between;
+  padding: 7px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+.info-row .key { color: var(--text-faint); }
+.info-row .val { color: var(--text); }
+
+.info-section { margin-top: 14px; }
+.info-section-label {
+  font-size: 9px; letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+.rot-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 4px;
+}
+.rot-btn {
+  padding: 7px 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.rot-btn:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+.del-btn {
+  width: 100%;
+  margin-top: 14px;
+  padding: 9px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--danger);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.del-btn:hover { background: var(--danger-soft); border-color: var(--danger); }
+
+/* ─── Stats (bottom right) ─────────────────────────────── */
+.stats {
+  position: fixed; bottom: 24px; right: 16px;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex; gap: 16px;
+  z-index: 40;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  animation: slideUp 0.4s 0.2s backwards;
+}
+.stat-item { display: flex; flex-direction: column; gap: 2px; }
+.stat-val { color: var(--accent); font-weight: 500; font-size: 14px; }
+.stat-key { color: var(--text-faint); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; font-family: 'DM Sans', sans-serif; }
+
+/* ─── Camera Hint (bottom left) ────────────────────────── */
+.cam-hint {
+  position: fixed; bottom: 24px; left: 16px;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  line-height: 1.7;
+  z-index: 40;
+  animation: fadeIn 0.6s 0.4s backwards;
+}
+.cam-hint kbd {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  color: var(--text-dim);
+  margin-right: 2px;
+}
+
+/* ─── Onboarding ───────────────────────────────────────── */
+.onboard {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 30;
+  animation: fadeIn 0.8s 0.3s backwards;
+}
+.onboard-title {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 32px; font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.5px;
+  margin-bottom: 10px;
+}
+.onboard-title em { color: var(--accent); font-style: normal; }
+.onboard-sub {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+.onboard-pulse {
+  width: 60px; height: 60px;
+  border: 2px dashed var(--accent);
+  border-radius: 50%;
+  margin: 24px auto 0;
+  animation: pulseRing 2s infinite ease-in-out;
+}
+
+/* ─── Hurdle Labels (3D overlay) ───────────────────────── */
+#labels { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
+.hl {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: var(--glass-strong);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid var(--border-bright);
+  color: var(--text);
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 500;
+  transition: all 0.15s;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+.hl.sel {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: var(--accent-glow);
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+/* ─── Modal ────────────────────────────────────────────── */
+.modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 200; align-items: center; justify-content: center; }
+.modal.open { display: flex; animation: fadeIn 0.2s; }
+.modal-box {
+  background: var(--glass-strong);
+  backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--border-bright);
+  border-radius: 18px;
+  padding: 24px;
+  max-width: 600px; width: 92%;
+  max-height: 85vh; overflow: auto;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+}
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+.modal-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.modal-sub { font-size: 12px; color: var(--text-dim); }
+.modal-close { background: transparent; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; padding: 4px 10px; border-radius: 6px; transition: all 0.15s; }
+.modal-close:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.modal-pre {
+  background: rgba(0,0,0,0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--text-dim);
+  overflow: auto; max-height: 380px;
+  margin: 12px 0;
+}
+.modal-pre .k { color: var(--accent); }
+.modal-pre .s { color: #b46b00; }
+.modal-pre .n { color: #6c4caa; }
+.modal-actions { display: flex; gap: 8px; }
+.mbtn { padding: 9px 16px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+.mbtn.primary { background: var(--accent); color: #ffffff; border: none; font-weight: 700; }
+.mbtn.primary:hover { box-shadow: var(--accent-glow); }
+.mbtn.secondary { background: transparent; border-color: var(--border-bright); color: var(--text-dim); }
+.mbtn.secondary:hover { border-color: var(--text-dim); color: var(--text); }
+</style>
+
+<div id="app">
+  <canvas id="c"></canvas>
+
+  <!-- Top bar -->
+  <div class="top-bar">
+    <div class="brand"><div class="brand-dot"></div>Parkours</div>
+    <input class="course-name" id="course-name" value="ZO 12" maxlength="20">
+    <div class="params">
+      <label class="chip" title="Speed"><input class="chip-input" type="number" id="p-speed" value="350"><span class="chip-suf">m/min</span></label>
+      <label class="chip" title="Length"><input class="chip-input" type="number" id="p-length" value="450"><span class="chip-suf">m</span></label>
+      <label class="chip" title="Time allowed"><input class="chip-input" type="number" id="p-time" value="78"><span class="chip-suf">s</span></label>
+      <label class="chip" title="Obstacle height"><input class="chip-input" type="number" id="p-height" value="1.40" step="0.05" style="width:42px"><span class="chip-suf">m</span></label>
+      <label class="chip" title="Arena width × depth">
+        <input class="chip-input" type="number" id="aw" value="60" min="10" max="200" style="width:30px" onchange="rebuildGround()">
+        <span class="chip-suf">×</span>
+        <input class="chip-input" type="number" id="ah" value="40" min="10" max="200" style="width:30px" onchange="rebuildGround()">
+        <span class="chip-suf">m</span>
+      </label>
+    </div>
+    <button class="export-btn" onclick="doExport()">Export ↗</button>
+  </div>
+
+  <!-- Status pill -->
+  <div class="status" id="status">Click anywhere to place hurdle <span class="accent">1</span></div>
+
+  <!-- Onboarding -->
+  <div class="onboard" id="onboard">
+    <div class="onboard-title">Build your <em>course</em></div>
+    <div class="onboard-sub">Click anywhere on the arena to place your first hurdle</div>
+    <div class="onboard-pulse"></div>
+  </div>
+
+  <!-- Action dock -->
+  <div class="dock">
+    <button class="dbtn" id="btn-combo" data-tip="Combination · C" onclick="toggleCombo()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="9" height="9" rx="1.5"/><rect x="12" y="12" width="9" height="9" rx="1.5"/></svg>
+    </button>
+    <button class="dbtn" id="btn-undo" data-tip="Undo · Z" onclick="undoLast()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7l-3 3"/></svg>
+    </button>
+    <button class="dbtn" id="btn-cam" data-tip="Reset view · R" onclick="resetCamera()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg>
+    </button>
+    <div class="divider"></div>
+    <button class="dbtn danger" id="btn-clear" data-tip="Clear all" onclick="clearAll()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+    </button>
+  </div>
+
+  <!-- Selected info panel -->
+  <div class="info" id="info">
+    <div class="info-header">
+      <div>
+        <div class="info-label">Hurdle</div>
+        <div class="info-num" id="info-num">—</div>
+      </div>
+      <div style="text-align:right">
+        <div class="info-label">Order</div>
+        <div style="font-family:'JetBrains Mono';font-size:13px;color:var(--text)" id="info-order">—</div>
+      </div>
+    </div>
+    <div class="info-row"><span class="key">X</span><span class="val" id="info-x">—</span></div>
+    <div class="info-row"><span class="key">Z</span><span class="val" id="info-z">—</span></div>
+    <div class="info-row"><span class="key">Rotation</span><span class="val" id="info-rot">—</span></div>
+    <div class="info-section">
+      <div class="info-section-label">Quick Rotate</div>
+      <div class="rot-grid">
+        <button class="rot-btn" onclick="stepRot(-45)">−45</button>
+        <button class="rot-btn" onclick="stepRot(-15)">−15</button>
+        <button class="rot-btn" onclick="stepRot(15)">+15</button>
+        <button class="rot-btn" onclick="stepRot(45)">+45</button>
+      </div>
+    </div>
+    <button class="del-btn" onclick="delSel()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+      Delete &nbsp;<kbd style="background:rgba(255,85,119,0.1);padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono';font-size:10px">Del</kbd>
+    </button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats" id="stats">
+    <div class="stat-item"><div class="stat-val" id="stat-count">0</div><div class="stat-key">Hurdles</div></div>
+    <div class="stat-item"><div class="stat-val" id="stat-dist">0m</div><div class="stat-key">Path</div></div>
+  </div>
+
+  <!-- Camera hint -->
+  <div class="cam-hint">
+    <kbd>Right-drag</kbd> orbit &nbsp; <kbd>Shift-drag</kbd> pan &nbsp; <kbd>Scroll</kbd> zoom
+  </div>
+
+  <div id="labels"></div>
+</div>
+
+<!-- Export modal -->
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Course Export</div>
+        <div class="modal-sub">Save as <code style="background:rgba(0,0,0,0.06);padding:1px 6px;border-radius:4px;color:var(--accent)">course.json</code> in your Unity Assets folder</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <pre class="modal-pre" id="modal-pre"></pre>
+    <div class="modal-actions">
+      <button class="mbtn primary" id="copy-btn" onclick="doCopy()">Copy to clipboard</button>
+      <button class="mbtn secondary" onclick="downloadJson()">Download .json</button>
+      <button class="mbtn secondary" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════════════
+let hurdles = [];          // { id, label, x, z, rotY }
+let selectedId = null;
+let nextNum = 1;
+let comboMode = null;      // { num, suffix }
+let arenaW = 60, arenaH = 40;
+let hoveredId = null;
+
+const ACCENT_HEX = 0x0CF2C2;
+const ACCENT_DARK = 0x062018;
+
+// ═══════════════════════════════════════════════════════════════════════
+// Three.js scene
+// ═══════════════════════════════════════════════════════════════════════
+const wrap = document.getElementById('app');
+const canvas = document.getElementById('c');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xebe7dc);
+// fog removed for light mode
+
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 500);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+// Lights — bright daylight
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb0c4a0, 0.7));
+const key = new THREE.DirectionalLight(0xfff5e0, 0.85);
+key.position.set(20, 35, 12);
+key.castShadow = true;
+Object.assign(key.shadow.camera, { near: 1, far: 120, left: -60, right: 60, top: 60, bottom: -60 });
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.bias = -0.0005;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xe8eaff, 0.25);
+rim.position.set(-15, 10, -20);
+scene.add(rim);
+
+// Camera with smooth orbit
+const orb = { theta: 0.4, phi: 0.95, r: 60, cx: 0, cz: 0,
+              tTheta: 0.4, tPhi: 0.95, tR: 60, tCx: 0, tCz: 0 };
+
+function applyOrb() {
+  camera.position.set(
+    orb.cx + orb.r * Math.sin(orb.phi) * Math.sin(orb.theta),
+    orb.r * Math.cos(orb.phi),
+    orb.cz + orb.r * Math.sin(orb.phi) * Math.cos(orb.theta)
+  );
+  camera.lookAt(orb.cx, 0, orb.cz);
+}
+
+function tickOrb() {
+  // smooth interpolation
+  const lerp = 0.18;
+  orb.theta += (orb.tTheta - orb.theta) * lerp;
+  orb.phi   += (orb.tPhi   - orb.phi)   * lerp;
+  orb.r     += (orb.tR     - orb.r)     * lerp;
+  orb.cx    += (orb.tCx    - orb.cx)    * lerp;
+  orb.cz    += (orb.tCz    - orb.cz)    * lerp;
+  applyOrb();
+}
+
+function resetCamera() {
+  orb.tTheta = 0.4; orb.tPhi = 0.95; orb.tR = Math.max(50, arenaW * 0.9);
+  orb.tCx = 0; orb.tCz = 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Ground / arena
+// ═══════════════════════════════════════════════════════════════════════
+let gMesh, gGrid, gBorder, gGlow;
+const gMat = new THREE.MeshStandardMaterial({ color: 0x7fa56e, roughness: 0.95, metalness: 0 });
+
+function rebuildGround() {
+  arenaW = Math.max(10, +document.getElementById('aw').value || 60);
+  arenaH = Math.max(10, +document.getElementById('ah').value || 40);
+  if (gMesh)   { scene.remove(gMesh);   gMesh.geometry.dispose(); }
+  if (gGrid)   { scene.remove(gGrid); }
+  if (gBorder) { scene.remove(gBorder); gBorder.geometry.dispose(); }
+  if (gGlow)   { scene.remove(gGlow);   gGlow.geometry.dispose(); }
+
+  gMesh = new THREE.Mesh(new THREE.PlaneGeometry(arenaW, arenaH), gMat);
+  gMesh.rotation.x = -Math.PI / 2;
+  gMesh.receiveShadow = true;
+  scene.add(gMesh);
+
+  // Subtle grid
+  const size = Math.max(arenaW, arenaH);
+  const divs = Math.ceil(size / 5);
+  gGrid = new THREE.GridHelper(size, divs, 0x4a6b48, 0x5a7858);
+  gGrid.position.y = 0.015;
+  gGrid.material.opacity = 0.45;
+  gGrid.material.transparent = true;
+  scene.add(gGrid);
+
+  // Bright border (teal accent)
+  const hw = arenaW / 2, hh = arenaH / 2;
+  const pts = [
+    new THREE.Vector3(-hw, 0.04, -hh), new THREE.Vector3(hw, 0.04, -hh),
+    new THREE.Vector3(hw, 0.04, hh),   new THREE.Vector3(-hw, 0.04, hh),
+    new THREE.Vector3(-hw, 0.04, -hh),
+  ];
+  gBorder = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color: ACCENT_HEX, opacity: 0.45, transparent: true })
+  );
+  scene.add(gBorder);
+
+  resetCamera();
+}
+rebuildGround();
+
+// ═══════════════════════════════════════════════════════════════════════
+// Hurdles
+// ═══════════════════════════════════════════════════════════════════════
+const hObjs = new Map();
+let pathLine = null;
+
+const M = {
+  post:    new THREE.MeshStandardMaterial({ color: 0xfaf3e0, roughness: 0.55, metalness: 0 }),
+  rail:    new THREE.MeshStandardMaterial({ color: 0xe8e0cd, roughness: 0.55, metalness: 0 }),
+  band:    new THREE.MeshStandardMaterial({ color: 0xc94d4d, roughness: 0.5, metalness: 0 }),
+  handle:  new THREE.MeshBasicMaterial({ color: ACCENT_HEX, transparent: true, opacity: 0 }),
+  ring:    new THREE.MeshBasicMaterial({ color: ACCENT_HEX, side: THREE.DoubleSide, transparent: true, opacity: 0 }),
+  ringInner: new THREE.MeshBasicMaterial({ color: ACCENT_HEX, side: THREE.DoubleSide, transparent: true, opacity: 0 }),
+};
+
+function makeHurdle(h) {
+  const g = new THREE.Group();
+  g.userData = { hid: h.id, type: 'hurdle' };
+
+  const addBox = (mat, w, ht, d, x, y, z, parent = g) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, ht, d), mat);
+    m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true;
+    parent.add(m); return m;
+  };
+
+  // Posts (white)
+  addBox(M.post, 0.16, 1.5, 0.16, -1.5, 0.75, 0);
+  addBox(M.post, 0.16, 1.5, 0.16,  1.5, 0.75, 0);
+  // Top cap on posts (red)
+  addBox(M.band, 0.18, 0.18, 0.18, -1.5, 1.5, 0);
+  addBox(M.band, 0.18, 0.18, 0.18,  1.5, 1.5, 0);
+
+  // Rails — alternating red/white bands
+  const railLen = 3.05;
+  const bandW = railLen / 5;
+  for (let i = 0; i < 5; i++) {
+    const x = -railLen/2 + bandW/2 + i * bandW;
+    addBox(i % 2 === 0 ? M.rail : M.band, bandW * 0.96, 0.12, 0.12, x, 1.35, 0);
+    addBox(i % 2 === 0 ? M.band : M.rail, bandW * 0.96, 0.12, 0.12, x, 0.85, 0);
+  }
+
+  // Filler planks
+  for (let i = -1; i <= 1; i++) {
+    addBox(M.post, 0.08, 0.4, 0.08, i * 0.85, 1.1, 0);
+  }
+
+  // ── Selection ring (ground, glowing) ──
+  const ring = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.15, 64), M.ring.clone());
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.05;
+  ring.name = 'ring';
+  g.add(ring);
+
+  // Inner faint disc
+  const innerRing = new THREE.Mesh(new THREE.RingGeometry(1.0, 2.0, 64), M.ringInner.clone());
+  innerRing.rotation.x = -Math.PI / 2;
+  innerRing.position.y = 0.04;
+  innerRing.name = 'innerRing';
+  g.add(innerRing);
+
+  // ── Rotation handle (teal arrow forward) ──
+  const handleGroup = new THREE.Group();
+  handleGroup.name = 'rotHandle';
+  handleGroup.userData = { hid: h.id, type: 'rotateHandle' };
+
+  // Arrow stem
+  const stemMat = M.handle.clone();
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.6, 8), stemMat);
+  stem.position.set(0, 0.08, -1.4);
+  stem.rotation.x = Math.PI / 2;
+  handleGroup.add(stem);
+
+  // Arrow head
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.4, 12), stemMat);
+  head.position.set(0, 0.08, -2.4);
+  head.rotation.x = -Math.PI / 2;
+  handleGroup.add(head);
+
+  // Big invisible hit area for the handle
+  const hitArea = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 0.5, 2.0),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  hitArea.position.set(0, 0.25, -1.7);
+  hitArea.userData = { hid: h.id, type: 'rotateHandle' };
+  handleGroup.add(hitArea);
+
+  g.add(handleGroup);
+
+  g.position.set(h.x, 0, h.z);
+  g.rotation.y = h.rotY * Math.PI / 180;
+  scene.add(g);
+  hObjs.set(h.id, g);
+
+  // Pop-in animation
+  g.scale.setScalar(0.01);
+  const startTime = performance.now();
+  function popIn() {
+    const t = (performance.now() - startTime) / 280;
+    if (t >= 1) { g.scale.setScalar(1); return; }
+    const eased = 1 - Math.pow(1 - t, 3);
+    const overshoot = 1 + (1 - t) * 0.15 * Math.sin(t * Math.PI * 2);
+    g.scale.setScalar(eased * overshoot);
+    requestAnimationFrame(popIn);
+  }
+  popIn();
+}
+
+function rmHurdle(id) {
+  const o = hObjs.get(id); if (!o) return;
+  o.traverse(c => { if (c.geometry && c.geometry.dispose) c.geometry.dispose(); });
+  scene.remove(o);
+  hObjs.delete(id);
+}
+
+function syncTransform(h) {
+  const o = hObjs.get(h.id); if (!o) return;
+  o.position.set(h.x, 0, h.z);
+  o.rotation.y = h.rotY * Math.PI / 180;
+}
+
+function setSelectionVisuals() {
+  hObjs.forEach((o, id) => {
+    const r = o.getObjectByName('ring');
+    const ir = o.getObjectByName('innerRing');
+    const handle = o.getObjectByName('rotHandle');
+    const isSel = id === selectedId;
+    const isHov = id === hoveredId && !isSel;
+
+    if (r) r.material.opacity = isSel ? 0.9 : (isHov ? 0.3 : 0);
+    if (ir) ir.material.opacity = isSel ? 0.06 : 0;
+    if (handle) {
+      handle.children.forEach(c => {
+        if (c.material && c.material.opacity !== undefined) {
+          c.material.opacity = isSel ? 1 : 0;
+        }
+      });
+    }
+  });
+}
+
+function updatePath() {
+  if (pathLine) { scene.remove(pathLine); pathLine.geometry.dispose(); pathLine = null; }
+  if (hurdles.length < 2) return;
+  const pts = hurdles.map(h => new THREE.Vector3(h.x, 0.12, h.z));
+  pts.push(new THREE.Vector3(hurdles[0].x, 0.12, hurdles[0].z));
+  pathLine = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color: ACCENT_HEX, opacity: 0.7, transparent: true, linewidth: 2 })
+  );
+  scene.add(pathLine);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Labels
+// ═══════════════════════════════════════════════════════════════════════
+const lblsEl = document.getElementById('labels');
+const lblMap = new Map();
+
+function mkLabel(h) {
+  const d = document.createElement('div');
+  d.className = 'hl';
+  d.textContent = h.label;
+  d.dataset.id = h.id;
+  lblsEl.appendChild(d);
+  lblMap.set(h.id, d);
+}
+
+function rmLabel(id) {
+  const d = lblMap.get(id); if (!d) return;
+  lblsEl.removeChild(d); lblMap.delete(id);
+}
+
+function updateLabels() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  lblMap.forEach((d, id) => {
+    const o = hObjs.get(id); if (!o) return;
+    const p = new THREE.Vector3(o.position.x, 2.4, o.position.z);
+    p.project(camera);
+    const sx = (p.x * 0.5 + 0.5) * w, sy = (-p.y * 0.5 + 0.5) * h;
+    d.style.left = sx + 'px'; d.style.top = sy + 'px';
+    d.style.display = (p.z < 1 && sx > -50 && sx < w + 50 && sy > -50 && sy < h + 50) ? 'flex' : 'none';
+    d.classList.toggle('sel', id === selectedId);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Raycasting
+// ═══════════════════════════════════════════════════════════════════════
+const rc = new THREE.Raycaster();
+const mv = new THREE.Vector2();
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+function setMouse(cx, cy) {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  mv.set((cx / w) * 2 - 1, -(cy / h) * 2 + 1);
+  rc.setFromCamera(mv, camera);
+}
+
+function hitGround(cx, cy) {
+  setMouse(cx, cy);
+  const t = new THREE.Vector3();
+  return rc.ray.intersectPlane(groundPlane, t) ? t : null;
+}
+
+function hitScene(cx, cy) {
+  setMouse(cx, cy);
+  // Test rotation handle of selected first (priority)
+  if (selectedId) {
+    const sel = hObjs.get(selectedId);
+    if (sel) {
+      const handle = sel.getObjectByName('rotHandle');
+      if (handle) {
+        const ms = [];
+        handle.traverse(c => { if (c.isMesh) ms.push(c); });
+        const hit = rc.intersectObjects(ms, false);
+        if (hit.length) return { type: 'rotateHandle', hid: selectedId };
+      }
+    }
+  }
+  // Then any hurdle body
+  const ms = [];
+  hObjs.forEach((o, hid) => {
+    o.children.forEach(c => {
+      if (c.name === 'rotHandle' || c.name === 'ring' || c.name === 'innerRing') return;
+      c.traverse(child => { if (child.isMesh) ms.push(child); });
+    });
+  });
+  const hit = rc.intersectObjects(ms, false);
+  if (hit.length) {
+    let cur = hit[0].object;
+    while (cur && !cur.userData.hid) cur = cur.parent;
+    if (cur && cur.userData.hid) return { type: 'hurdle', hid: cur.userData.hid };
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Input handling
+// ═══════════════════════════════════════════════════════════════════════
+const ms = {
+  down: false, sx: 0, sy: 0, cx: 0, cy: 0, btn: 0, drag: false, shift: false,
+  mode: null, // 'orbit' | 'pan' | 'move' | 'rotate' | null
+  hid: null,
+  rotStartAngle: 0, rotStartRot: 0,
+};
+
+function gcp(e) { const r = wrap.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  const [x, y] = gcp(e);
+  ms.down = true; ms.sx = ms.cx = x; ms.sy = ms.cy = y;
+  ms.btn = e.button; ms.drag = false; ms.shift = e.shiftKey;
+  ms.mode = null; ms.hid = null;
+
+  if (e.button === 2) {
+    ms.mode = e.shiftKey ? 'pan' : 'orbit';
+    canvas.classList.add(e.shiftKey ? 'grabbing' : 'orbiting');
+    return;
+  }
+  if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+    ms.mode = 'pan';
+    canvas.classList.add('grabbing');
+    return;
+  }
+
+  // Left click: check what was hit
+  const h = hitScene(x, y);
+  if (h && h.type === 'rotateHandle') {
+    // Start rotate
+    const obj = hObjs.get(h.hid);
+    const groundHit = hitGround(x, y);
+    if (groundHit) {
+      ms.mode = 'rotate'; ms.hid = h.hid;
+      ms.rotStartAngle = Math.atan2(groundHit.x - obj.position.x, groundHit.z - obj.position.z);
+      ms.rotStartRot = hurdles.find(hh => hh.id === h.hid).rotY;
+      canvas.classList.add('rotating');
+    }
+  } else if (h && h.type === 'hurdle') {
+    // Selecting / moving
+    if (selectedId !== h.hid) setSel(h.hid);
+    ms.mode = 'move'; ms.hid = h.hid;
+    canvas.classList.add('grabbing');
+  }
+  // else: pending — could be place (on click) or orbit (on drag)
+});
+
+canvas.addEventListener('pointermove', e => {
+  const [x, y] = gcp(e);
+
+  // Hover detect (only when not dragging)
+  if (!ms.down) {
+    const h = hitScene(x, y);
+    const newHov = h && h.type === 'hurdle' ? h.hid : null;
+    if (newHov !== hoveredId) {
+      hoveredId = newHov;
+      setSelectionVisuals();
+      canvas.classList.toggle('grab', !!hoveredId && !selectedId);
+    }
+    return;
+  }
+
+  const dx = x - ms.cx, dy = y - ms.cy;
+  ms.cx = x; ms.cy = y;
+  if (Math.abs(x - ms.sx) > 4 || Math.abs(y - ms.sy) > 4) ms.drag = true;
+
+  if (!ms.drag) return;
+
+  // Promote pending left-click to orbit if no hit
+  if (ms.btn === 0 && !ms.mode) { ms.mode = 'orbit'; canvas.classList.add('orbiting'); }
+
+  if (ms.mode === 'orbit') {
+    orb.tTheta -= dx * 0.008;
+    orb.tPhi = Math.max(0.18, Math.min(1.45, orb.tPhi - dy * 0.008));
+  } else if (ms.mode === 'pan') {
+    const f = orb.r * 0.0018;
+    const fwd = new THREE.Vector3(Math.sin(orb.theta), 0, Math.cos(orb.theta));
+    const rgt = new THREE.Vector3(Math.cos(orb.theta), 0, -Math.sin(orb.theta));
+    orb.tCx -= rgt.x * dx * f * 6 - fwd.x * dy * f * 6;
+    orb.tCz -= rgt.z * dx * f * 6 - fwd.z * dy * f * 6;
+  } else if (ms.mode === 'move') {
+    const p = hitGround(x, y);
+    if (p) {
+      const h = hurdles.find(h => h.id === ms.hid);
+      if (h) {
+        h.x = Math.max(-arenaW/2 + 1.8, Math.min(arenaW/2 - 1.8, p.x));
+        h.z = Math.max(-arenaH/2 + 1.8, Math.min(arenaH/2 - 1.8, p.z));
+        syncTransform(h); updatePath(); updateInfoPanel(); updateStats();
+      }
+    }
+  } else if (ms.mode === 'rotate') {
+    const obj = hObjs.get(ms.hid);
+    const p = hitGround(x, y);
+    if (p && obj) {
+      const angle = Math.atan2(p.x - obj.position.x, p.z - obj.position.z);
+      const delta = (angle - ms.rotStartAngle) * 180 / Math.PI;
+      const h = hurdles.find(h => h.id === ms.hid);
+      // Convert: handle is at -Z so rotation is opposite
+      h.rotY = ((ms.rotStartRot + delta) % 360 + 360) % 360;
+      syncTransform(h); updateInfoPanel();
+    }
+  }
+});
+
+canvas.addEventListener('pointerup', e => {
+  canvas.releasePointerCapture(e.pointerId);
+  canvas.classList.remove('grabbing', 'orbiting', 'rotating');
+
+  if (!ms.drag && ms.btn === 0) {
+    const [x, y] = gcp(e);
+    const h = hitScene(x, y);
+    if (!h) {
+      // Place new hurdle on click
+      const p = hitGround(x, y);
+      if (p && Math.abs(p.x) < arenaW/2 - 1 && Math.abs(p.z) < arenaH/2 - 1) {
+        placeHurdle(p.x, p.z);
+      } else {
+        setSel(null); // click outside arena = deselect
+      }
+    } else if (h.type === 'hurdle') {
+      setSel(h.hid);
+    }
+  }
+  ms.down = false; ms.mode = null; ms.hid = null;
+});
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  orb.tR = Math.max(8, Math.min(180, orb.tR + e.deltaY * 0.08));
+}, { passive: false });
+
+// Keyboard
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); delSel(); }
+  else if (e.key.toLowerCase() === 'z' && (e.ctrlKey || e.metaKey || true)) { e.preventDefault(); undoLast(); }
+  else if (e.key === 'Escape') { setSel(null); }
+  else if (e.key.toLowerCase() === 'c') { toggleCombo(); }
+  else if (e.key.toLowerCase() === 'r') { resetCamera(); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Hurdle management
+// ═══════════════════════════════════════════════════════════════════════
+function placeHurdle(wx, wz) {
+  let label;
+  if (comboMode) {
+    label = comboMode.num + comboMode.suffix;
+    if (comboMode.suffix === 'a') comboMode = { num: comboMode.num, suffix: 'b' };
+    else if (comboMode.suffix === 'b') comboMode = { num: comboMode.num, suffix: 'c' };
+    else { comboMode = null; nextNum++; }
+    updateComboBtn();
+  } else {
+    label = `${nextNum++}`;
+  }
+  const h = { id: Date.now() + Math.random(), label, x: wx, z: wz, rotY: 0 };
+  hurdles.push(h);
+  makeHurdle(h);
+  mkLabel(h);
+  updatePath();
+  setSel(h.id);
+  updateStats();
+  updateStatus();
+  hideOnboard();
+}
+
+function setSel(id) {
+  selectedId = id;
+  setSelectionVisuals();
+  updateInfoPanel();
+  updateStatus();
+}
+
+function stepRot(deg) {
+  const h = hurdles.find(h => h.id === selectedId); if (!h) return;
+  h.rotY = (h.rotY + deg + 360) % 360;
+  syncTransform(h); updateInfoPanel();
+}
+
+function delSel() {
+  if (!selectedId) return;
+  hurdles = hurdles.filter(h => h.id !== selectedId);
+  rmHurdle(selectedId); rmLabel(selectedId);
+  updatePath(); selectedId = null;
+  updateInfoPanel(); updateStats(); updateStatus();
+}
+
+function undoLast() {
+  if (!hurdles.length) return;
+  const last = hurdles.pop();
+  rmHurdle(last.id); rmLabel(last.id);
+  updatePath();
+  const n = parseInt(last.label);
+  if (!isNaN(n) && !last.label.match(/[a-c]$/)) { nextNum = n; comboMode = null; }
+  if (selectedId === last.id) selectedId = null;
+  updateInfoPanel(); updateStats(); updateStatus(); updateComboBtn();
+  if (hurdles.length === 0) showOnboard();
+}
+
+function clearAll() {
+  if (hurdles.length && !confirm('Clear all hurdles?')) return;
+  hurdles.forEach(h => { rmHurdle(h.id); rmLabel(h.id); });
+  hurdles = []; updatePath();
+  selectedId = null; nextNum = 1; comboMode = null;
+  updateInfoPanel(); updateStats(); updateStatus(); updateComboBtn();
+  showOnboard();
+}
+
+function toggleCombo() {
+  if (comboMode) comboMode = null;
+  else comboMode = { num: nextNum, suffix: 'a' };
+  updateComboBtn(); updateStatus();
+}
+
+function updateComboBtn() {
+  const b = document.getElementById('btn-combo');
+  b.classList.toggle('active', !!comboMode);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// UI updates
+// ═══════════════════════════════════════════════════════════════════════
+function updateInfoPanel() {
+  const info = document.getElementById('info');
+  const h = hurdles.find(h => h.id === selectedId);
+  if (!h) { info.classList.remove('show'); return; }
+  info.classList.add('show');
+  document.getElementById('info-num').textContent = h.label;
+  document.getElementById('info-order').textContent = `${hurdles.indexOf(h) + 1}/${hurdles.length}`;
+  document.getElementById('info-x').textContent = h.x.toFixed(1) + 'm';
+  document.getElementById('info-z').textContent = h.z.toFixed(1) + 'm';
+  document.getElementById('info-rot').textContent = Math.round(h.rotY) + '°';
+}
+
+function updateStatus() {
+  const s = document.getElementById('status');
+  if (comboMode) {
+    s.innerHTML = `Combo mode · click to place <span class="accent">${comboMode.num}${comboMode.suffix}</span>`;
+  } else if (selectedId) {
+    const h = hurdles.find(h => h.id === selectedId);
+    s.innerHTML = `Hurdle <span class="accent">${h.label}</span> · drag to move · drag arrow to rotate`;
+  } else {
+    s.innerHTML = `Click anywhere to place hurdle <span class="accent">${nextNum}</span>`;
+  }
+}
+
+function updateStats() {
+  document.getElementById('stat-count').textContent = hurdles.length;
+  let dist = 0;
+  for (let i = 1; i < hurdles.length; i++) {
+    const dx = hurdles[i].x - hurdles[i-1].x;
+    const dz = hurdles[i].z - hurdles[i-1].z;
+    dist += Math.sqrt(dx*dx + dz*dz);
+  }
+  if (hurdles.length > 1) {
+    const dx = hurdles[0].x - hurdles[hurdles.length-1].x;
+    const dz = hurdles[0].z - hurdles[hurdles.length-1].z;
+    dist += Math.sqrt(dx*dx + dz*dz);
+  }
+  document.getElementById('stat-dist').textContent = Math.round(dist) + 'm';
+}
+
+function showOnboard() { document.getElementById('onboard').style.display = 'block'; }
+function hideOnboard() { document.getElementById('onboard').style.display = 'none'; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Export
+// ═══════════════════════════════════════════════════════════════════════
+function buildExportData() {
+  return {
+    courseInfo: {
+      name: document.getElementById('course-name').value,
+      arenaSize: `${arenaW}x${arenaH}m`,
+      speed_m_per_min: +document.getElementById('p-speed').value,
+      length_m: +document.getElementById('p-length').value,
+      timeAllowed_sec: +document.getElementById('p-time').value,
+      obstacleHeight_m: +document.getElementById('p-height').value,
+      totalObstacles: hurdles.length,
+    },
+    hurdles: hurdles.map((h, i) => ({
+      order: i + 1, label: h.label,
+      unityPosition: { x: +h.x.toFixed(2), y: 0, z: +h.z.toFixed(2) },
+      rotationY: Math.round(h.rotY),
+    })),
+  };
+}
+
+function syntaxHighlight(json) {
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, m => {
+    let cls = 'n';
+    if (/^"/.test(m)) cls = /:$/.test(m) ? 'k' : 's';
+    return `<span class="${cls}">${m}</span>`;
+  });
+}
+
+function doExport() {
+  const data = buildExportData();
+  const json = JSON.stringify(data, null, 2);
+  document.getElementById('modal-pre').innerHTML = syntaxHighlight(json);
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+function doCopy() {
+  const data = buildExportData();
+  navigator.clipboard?.writeText(JSON.stringify(data, null, 2));
+  const b = document.getElementById('copy-btn');
+  b.textContent = '✓ Copied'; b.style.background = '#4ade80';
+  setTimeout(() => { b.textContent = 'Copy to clipboard'; b.style.background = ''; }, 1800);
+}
+
+function downloadJson() {
+  const data = buildExportData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (data.courseInfo.name || 'course').replace(/\s+/g, '_') + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target.id === 'modal') closeModal();
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Resize & loop
+// ═══════════════════════════════════════════════════════════════════════
+function resize() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+resize();
+new ResizeObserver(resize).observe(wrap);
+
+let frame = 0;
+function loop() {
+  requestAnimationFrame(loop);
+  tickOrb();
+
+  // Pulse selection ring + handle
+  frame++;
+  if (selectedId) {
+    const o = hObjs.get(selectedId);
+    if (o) {
+      const r = o.getObjectByName('ring');
+      if (r) r.material.opacity = 0.7 + Math.sin(frame * 0.06) * 0.2;
+    }
+  }
+
+  renderer.render(scene, camera);
+  updateLabels();
+}
+loop();
+
+updateStats();
+updateStatus();
+
+// Subtle camera intro animation
+let introT = 0;
+function intro() {
+  introT += 0.012;
+  if (introT >= 1) return;
+  orb.tTheta = 0.4 + Math.sin(introT * Math.PI) * 0.12;
+  requestAnimationFrame(intro);
+}
+setTimeout(intro, 500);
+</script>

@@ -1,0 +1,53 @@
+{
+  "courseInfo": {
+    "name": "ZO 12",
+    "arenaSize": "60x40m",
+    "speed_m_per_min": 350,
+    "length_m": 450,
+    "timeAllowed_sec": 78,
+    "obstacleHeight_m": 1.4,
+    "totalObstacles": 4
+  },
+  "hurdles": [
+    {
+      "order": 1,
+      "label": "1",
+      "unityPosition": {
+        "x": -19.97,
+        "y": 0,
+        "z": -0.17
+      },
+      "rotationY": 0
+    },
+    {
+      "order": 2,
+      "label": "2",
+      "unityPosition": {
+        "x": -1,
+        "y": 0,
+        "z": -14.02
+      },
+      "rotationY": 270
+    },
+    {
+      "order": 3,
+      "label": "3",
+      "unityPosition": {
+        "x": 19.43,
+        "y": 0,
+        "z": -14.95
+      },
+      "rotationY": 180
+    },
+    {
+      "order": 4,
+      "label": "4",
+      "unityPosition": {
+        "x": 19.76,
+        "y": 0,
+        "z": 10.38
+      },
+      "rotationY": 180
+    }
+  ]
+}

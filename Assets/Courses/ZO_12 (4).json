@@ -1,0 +1,113 @@
+{
+  "courseInfo": {
+    "name": "ZO 12",
+    "arenaSize": "60x40m",
+    "speed_m_per_min": 350,
+    "length_m": 450,
+    "timeAllowed_sec": 78,
+    "obstacleHeight_m": 1.4,
+    "totalObstacles": 10
+  },
+  "hurdles": [
+    {
+      "order": 1,
+      "label": "1",
+      "unityPosition": {
+        "x": 21.26,
+        "y": 0,
+        "z": -3.44
+      },
+      "rotationY": 180
+    },
+    {
+      "order": 2,
+      "label": "2",
+      "unityPosition": {
+        "x": 10.5,
+        "y": 0,
+        "z": 5.7
+      },
+      "rotationY": 45
+    },
+    {
+      "order": 3,
+      "label": "3",
+      "unityPosition": {
+        "x": -7.98,
+        "y": 0,
+        "z": -15.87
+      },
+      "rotationY": 90
+    },
+    {
+      "order": 4,
+      "label": "4",
+      "unityPosition": {
+        "x": -9.81,
+        "y": 0,
+        "z": 2.34
+      },
+      "rotationY": 315
+    },
+    {
+      "order": 5,
+      "label": "5",
+      "unityPosition": {
+        "x": -2.81,
+        "y": 0,
+        "z": -5.75
+      },
+      "rotationY": 315
+    },
+    {
+      "order": 6,
+      "label": "6",
+      "unityPosition": {
+        "x": 15.78,
+        "y": 0,
+        "z": -14.63
+      },
+      "rotationY": 270
+    },
+    {
+      "order": 7,
+      "label": "7",
+      "unityPosition": {
+        "x": 22.5,
+        "y": 0,
+        "z": 12.83
+      },
+      "rotationY": 105
+    },
+    {
+      "order": 8,
+      "label": "8",
+      "unityPosition": {
+        "x": 2.59,
+        "y": 0,
+        "z": 15.63
+      },
+      "rotationY": 90
+    },
+    {
+      "order": 9,
+      "label": "9",
+      "unityPosition": {
+        "x": -21.61,
+        "y": 0,
+        "z": 9.95
+      },
+      "rotationY": 45
+    },
+    {
+      "order": 10,
+      "label": "10",
+      "unityPosition": {
+        "x": -23.62,
+        "y": 0,
+        "z": -7.19
+      },
+      "rotationY": 0
+    }
+  ]
+}
