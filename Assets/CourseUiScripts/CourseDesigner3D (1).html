@@ -218,6 +218,21 @@ canvas#c.orbiting { cursor: move; }
 }
 .info.show { display: block; }
 
+.info.inspector-empty .info-num { color: var(--text-dim); }
+.info.inspector-empty .info-section-label,
+.info.inspector-empty .rot-btn {
+  opacity: 0.42;
+}
+.info.inspector-empty .rot-btn {
+  cursor: default;
+  pointer-events: none;
+}
+.info.inspector-empty .del-btn {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
 .info-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 14px;
@@ -288,6 +303,117 @@ canvas#c.orbiting { cursor: move; }
   display: flex; align-items: center; justify-content: center; gap: 6px;
 }
 .del-btn:hover { background: var(--danger-soft); border-color: var(--danger); }
+
+/* ─── FEI Summary panel (left — hurdle inspector stays on the right) ── */
+.fei-panel {
+  position: fixed; left: 16px; top: 92px; right: auto;
+  width: min(294px, calc(100vw - 260px));
+  max-height: min(620px, calc(100vh - 200px));
+  overflow-x: hidden; overflow-y: auto;
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px 14px;
+  z-index: 35;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+}
+.fei-head {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.fei-mini {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  margin-bottom: 10px;
+}
+.fei-mini button {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.fei-mini button:hover { border-color: var(--accent); color: var(--accent); }
+.fei-mini button.fei-chip-on {
+  border-color: var(--accent); background: rgba(12,242,194,0.12);
+  color: var(--accent);
+  font-weight: 600;
+}
+.fei-empty {
+  font-size: 12px; font-style: italic;
+  color: var(--text-faint);
+  line-height: 1.55;
+  text-align: center;
+  padding: 16px 6px;
+}
+.fei-card {
+  background: rgba(0,0,0,0.08);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 11px;
+  margin-bottom: 10px;
+}
+.fei-card-title {
+  font-size: 9px; letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-family: 'DM Sans', sans-serif;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+.fei-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.fei-metric:last-child { border-bottom: none; }
+.fei-k { font-size: 9px; letter-spacing: 1px; color: var(--text-faint); text-transform: uppercase; }
+.fei-v {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px; font-weight: 600;
+  color: var(--text);
+}
+.fei-u { font-size: 11px; color: var(--text-faint); font-weight: 500; margin-left: 6px; }
+.fei-hint { font-size: 9px; font-style: italic; color: var(--text-dim); line-height: 1.35; margin-top: 2px; }
+
+.fei-val-badge {
+  display: inline-flex; align-items: center;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  font-family: 'DM Sans', sans-serif;
+}
+.fei-val-valid { background: rgba(74,222,128,0.22); color: #4ade80; }
+.fei-val-risky { background: rgba(250,204,21,0.18); color: #fbbf24; }
+.fei-val-invalid { background: rgba(248,113,113,0.22); color: #f87171; }
+
+.fei-issue {
+  margin-bottom: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.fei-issue.warn { border-left: 3px solid #eab308; background: rgba(234,179,8,0.08); color: var(--text-dim); }
+.fei-issue.bad { border-left: 3px solid #ef4444; background: rgba(239,68,68,0.1); color: var(--text); }
+.fei-fix { margin-top: 4px; font-size: 10px; opacity: 0.85; }
+.fei-fixed-p { margin: 10px 0 0 0; font-size: 9px; line-height: 1.35; opacity: .75; font-style: italic; color: var(--text-dim); }
 
 /* ─── Stats (bottom right) ─────────────────────────────── */
 .stats {
@@ -439,10 +565,8 @@ canvas#c.orbiting { cursor: move; }
     <div class="brand"><div class="brand-dot"></div>Parkours</div>
     <input class="course-name" id="course-name" value="ZO 12" maxlength="20">
     <div class="params">
-      <label class="chip" title="Speed"><input class="chip-input" type="number" id="p-speed" value="350"><span class="chip-suf">m/min</span></label>
-      <label class="chip" title="Length"><input class="chip-input" type="number" id="p-length" value="450"><span class="chip-suf">m</span></label>
-      <label class="chip" title="Time allowed"><input class="chip-input" type="number" id="p-time" value="78"><span class="chip-suf">s</span></label>
-      <label class="chip" title="Obstacle height"><input class="chip-input" type="number" id="p-height" value="1.40" step="0.05" style="width:42px"><span class="chip-suf">m</span></label>
+      <label class="chip" title="Speed"><input class="chip-input" type="number" id="p-speed" value="350" oninput="touchSpeedInput()"><span class="chip-suf">m/min</span></label>
+      <label class="chip" title="Obstacle height"><input class="chip-input" type="number" id="p-height" value="1.40" step="0.05" style="width:42px" oninput="refreshFei()"><span class="chip-suf">m</span></label>
       <label class="chip" title="Arena width × depth">
         <input class="chip-input" type="number" id="aw" value="60" min="10" max="200" style="width:30px" onchange="rebuildGround()">
         <span class="chip-suf">×</span>
@@ -454,18 +578,18 @@ canvas#c.orbiting { cursor: move; }
   </div>
 
   <!-- Status pill -->
-  <div class="status" id="status">Click anywhere to place hurdle <span class="accent">1</span></div>
+  <div class="status" id="status">Use <strong>Place hurdle</strong> below · then drag hurdles to adjust</div>
 
   <!-- Onboarding -->
   <div class="onboard" id="onboard">
     <div class="onboard-title">Build your <em>course</em></div>
-    <div class="onboard-sub">Click anywhere on the arena to place your first hurdle</div>
+    <div class="onboard-sub">Tap the hurdle icon in the dock, then click the arena · Use <strong>Adjust</strong> to move fences after placing</div>
     <div class="onboard-pulse"></div>
   </div>
 
   <!-- Action dock -->
   <div class="dock">
-    <button class="dbtn" id="btn-combo" data-tip="Combination · C" onclick="toggleCombo()">
+    <button class="dbtn" id="btn-combo" data-tip="Combination (double). Shift+click or Shift+C = triple · C" onclick="toggleCombo(event)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="9" height="9" rx="1.5"/><rect x="12" y="12" width="9" height="9" rx="1.5"/></svg>
     </button>
     <button class="dbtn" id="btn-undo" data-tip="Undo · Z" onclick="undoLast()">
@@ -475,21 +599,34 @@ canvas#c.orbiting { cursor: move; }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg>
     </button>
     <div class="divider"></div>
+    <button class="dbtn dock-place active" id="btn-place-adjust" data-tip="Adjust — drag to move fences; arena tap deselects (no new fence)" onclick="setPlaceMode('adjust')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 9l-3 3 3 3M19 15l3-3-3-3"/><path d="M2 12h20"/><path d="M12 5v14"/></svg>
+    </button>
+    <button class="dbtn dock-place" id="btn-place-hurdle" data-tip="Place hurdles — next arena click adds a fence" onclick="setPlaceMode('hurdle')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 17l4-11h8l4 11M10 17l2-11M14 17l-2-11"/></svg>
+    </button>
+    <button class="dbtn dock-place" id="btn-place-start" data-tip="Place start sensor" onclick="setPlaceMode('start')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="5,17 12,7 19,17 18,17 18,17" stroke-linejoin="round"/><text x="12" y="15" text-anchor="middle" fill="currentColor" font-size="7" stroke="none" font-family="sans-serif">S</text></svg>
+    </button>
+    <button class="dbtn dock-place" id="btn-place-finish" data-tip="Place finish sensor" onclick="setPlaceMode('finish')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="8" width="14" height="10" rx="1"/><path d="M9 17v2h6v-2"/><text x="12" y="15" text-anchor="middle" fill="currentColor" font-size="6" stroke="none" font-family="sans-serif">F</text></svg>
+    </button>
+    <div class="divider"></div>
     <button class="dbtn danger" id="btn-clear" data-tip="Clear all" onclick="clearAll()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
     </button>
   </div>
 
-  <!-- Selected info panel -->
-  <div class="info" id="info">
+  <!-- Selected info panel (always visible) -->
+  <div class="info show inspector-empty" id="info">
     <div class="info-header">
       <div>
-        <div class="info-label">Hurdle</div>
-        <div class="info-num" id="info-num">—</div>
+        <div class="info-label" id="info-label">Selection</div>
+        <div class="info-num" id="info-num">Nothing selected</div>
       </div>
       <div style="text-align:right">
         <div class="info-label">Order</div>
-        <div style="font-family:'JetBrains Mono';font-size:13px;color:var(--text)" id="info-order">—</div>
+        <div style="font-family:'JetBrains Mono';font-size:13px;color:var(--text-dim)" id="info-order">—</div>
       </div>
     </div>
     <div class="info-row"><span class="key">X</span><span class="val" id="info-x">—</span></div>
@@ -512,8 +649,9 @@ canvas#c.orbiting { cursor: move; }
 
   <!-- Stats -->
   <div class="stats" id="stats">
-    <div class="stat-item"><div class="stat-val" id="stat-count">0</div><div class="stat-key">Hurdles</div></div>
     <div class="stat-item"><div class="stat-val" id="stat-dist">0m</div><div class="stat-key">Path</div></div>
+    <div class="stat-item"><div class="stat-val" id="stat-nums">—</div><div class="stat-key">Numbers</div></div>
+    <div class="stat-item"><div class="stat-val" id="stat-eff">—</div><div class="stat-key">Efforts</div></div>
   </div>
 
   <!-- Camera hint -->
@@ -522,6 +660,46 @@ canvas#c.orbiting { cursor: move; }
   </div>
 
   <div id="labels"></div>
+
+  <!-- FEI metrics + validation -->
+  <div class="fei-panel" id="fei-panel">
+    <div class="fei-head">FEI course summary</div>
+    <div class="fei-mini" aria-label="Speed presets">
+      <button type="button" id="chip-sp-indoor" onclick="setSpeedPreset3d(350)">Indoor 350</button>
+      <button type="button" id="chip-sp-out375" onclick="setSpeedPreset3d(375)">Outdoor 375</button>
+      <button type="button" id="chip-sp-out400" onclick="setSpeedPreset3d(400)">Outdoor 400</button>
+      <button type="button" id="chip-sp-custom" onclick="focusSpeedCustom()" class="fei-chip-on">Custom</button>
+    </div>
+    <div id="fei-empty" class="fei-empty">
+      Build a course to calculate FEI metrics.<br/><span style="font-size:10px;opacity:.7">Timing uses the ridden path shown in cyan.</span>
+    </div>
+    <div id="fei-body" style="display:none">
+      <div class="fei-card" id="fei-card-metrics">
+        <div class="fei-card-title">Course metrics</div>
+        <div class="fei-metric"><span class="fei-k">Speed</span><span><span class="fei-v" id="fei-v-speed"></span><span class="fei-u">m/min</span></span></div>
+        <div class="fei-metric"><span class="fei-k">Course length</span><span><span class="fei-v" id="fei-v-length"></span><span class="fei-u">m</span></span></div>
+        <div class="fei-metric"><span class="fei-k">Time allowed</span><span><span class="fei-v" id="fei-v-ta"></span><span class="fei-u">s</span></span></div>
+        <div class="fei-metric"><span class="fei-k">Time limit</span><span><span class="fei-v" id="fei-v-tl"></span><span class="fei-u">s · 2× allowed</span></span></div>
+        <div class="fei-metric"><span class="fei-k">Obstacle numbers</span><span><span class="fei-v" id="fei-v-obs"></span><span class="fei-u">count</span></span><span class="fei-hint">Combinations share one obstacle number but add efforts.</span></div>
+        <div class="fei-metric"><span class="fei-k">Efforts</span><span><span class="fei-v" id="fei-v-eff"></span><span class="fei-u">jumps</span></span></div>
+        <p class="fei-fixed-p">Time allowed = (length ÷ speed) × 60 s, rounded · Limit = twice that.</p>
+      </div>
+      <div class="fei-card" id="fei-card-structure">
+        <div class="fei-card-title">Course structure</div>
+        <div class="fei-metric"><span class="fei-k">Singles</span><span class="fei-v" id="fei-v-singles"></span></div>
+        <div class="fei-metric"><span class="fei-k">Doubles</span><span class="fei-v" id="fei-v-doubles"></span></div>
+        <div class="fei-metric"><span class="fei-k">Triples</span><span class="fei-v" id="fei-v-triples"></span></div>
+        <div class="fei-metric"><span class="fei-k">Total numbers</span><span class="fei-v" id="fei-v-tobs"></span></div>
+        <div class="fei-metric"><span class="fei-k">Total efforts</span><span class="fei-v" id="fei-v-teff"></span></div>
+      </div>
+      <div class="fei-card">
+        <div class="fei-card-title">Course validation</div>
+        <div id="fei-val-status" class="fei-val-badge fei-val-valid">Valid</div>
+        <div id="fei-issues"></div>
+        <div id="fei-issues-ok" style="display:none;font-size:11px;color:var(--accent);font-weight:600">✓ Baseline checks passed</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Export modal -->
@@ -549,9 +727,14 @@ canvas#c.orbiting { cursor: move; }
 // State
 // ═══════════════════════════════════════════════════════════════════════
 let hurdles = [];          // { id, label, x, z, rotY }
-let selectedId = null;
+let startSensor = null;    // { x, z, rotY } | null — at most one
+let finishSensor = null;
+let selectedId = null;     // hurdle id
+let selectedSensor = null; // 'start' | 'finish' | null
+/** @type{'hurdle'|'start'|'finish'} */
+let placeMode = 'adjust';   // 'adjust' | 'hurdle' | 'start' | 'finish'
 let nextNum = 1;
-let comboMode = null;      // { num, suffix }
+let comboMode = null;      // { num, suffix, triple?: boolean } | null
 let arenaW = 60, arenaH = 40;
 let hoveredId = null;
 
@@ -659,6 +842,7 @@ function rebuildGround() {
   scene.add(gBorder);
 
   resetCamera();
+  refreshFei();
 }
 rebuildGround();
 
@@ -666,7 +850,99 @@ rebuildGround();
 // Hurdles
 // ═══════════════════════════════════════════════════════════════════════
 const hObjs = new Map();
+const sensorObjs = { start: null, finish: null }; // THREE.Group
 let pathLine = null;
+let parallelHintsGroup = null;
+
+/** Rails span hurdle group local ±X — parallelism ticks follow this axis. */
+const HURDLE_RAIL_HALF = (3.05 * 0.5);
+
+const parallelHintChordMatBase = new THREE.LineDashedMaterial({
+  color: 0xfff1c8,
+  transparent: true,
+  opacity: 0.92,
+  dashSize: 0.34,
+  gapSize: 0.22,
+  depthTest: false,
+});
+const parallelHintRailOkMat = new THREE.LineBasicMaterial({
+  color: 0x5eead4,
+  transparent: true,
+  opacity: 0.92,
+  depthTest: false,
+});
+const parallelHintRailWarnMat = new THREE.LineBasicMaterial({
+  color: 0xfbbf24,
+  transparent: true,
+  opacity: 0.92,
+  depthTest: false,
+});
+
+function railAxisFromRotY(rotYDeg) {
+  const v = new THREE.Vector3(1, 0, 0);
+  v.applyEuler(new THREE.Euler(0, THREE.MathUtils.degToRad(rotYDeg), 0));
+  return v.normalize();
+}
+
+function rotationParallelismDeg(yawA_deg, yawB_deg) {
+  let d = THREE.MathUtils.euclideanModulo(yawB_deg - yawA_deg, 360);
+  if (d > 180) d -= 360;
+  d = Math.abs(d);
+  return Math.min(d, Math.abs(d - 180));
+}
+
+function clearParallelHints() {
+  if (!parallelHintsGroup) return;
+  scene.remove(parallelHintsGroup);
+  parallelHintsGroup.traverse((obj) => {
+    const g = obj.geometry;
+    if (g && g.dispose) g.dispose();
+  });
+  parallelHintsGroup = null;
+}
+
+/** Dashed line to previous hurdle + rail ticks (teal ~ parallel within 4°, amber otherwise). */
+function updateParallelHints() {
+  clearParallelHints();
+  if (!selectedId || selectedSensor) return;
+
+  const idx = hurdles.findIndex((o) => o.id === selectedId);
+  if (idx <= 0) return;
+
+  const prev = hurdles[idx - 1];
+  const curr = hurdles[idx];
+  const parallelismDeg = rotationParallelismDeg(prev.rotY, curr.rotY);
+  const parallelOk = parallelismDeg <= 4;
+  const railMat = parallelOk ? parallelHintRailOkMat : parallelHintRailWarnMat;
+
+  const yChord = 0.19;
+  const yRail = 0.165;
+
+  const group = new THREE.Group();
+  group.name = 'ParallelHints';
+
+  const chordPts = [
+    new THREE.Vector3(prev.x, yChord, prev.z),
+    new THREE.Vector3(curr.x, yChord, curr.z),
+  ];
+  const chordGeom = new THREE.BufferGeometry().setFromPoints(chordPts);
+  chordGeom.computeLineDistances();
+  group.add(new THREE.Line(chordGeom, parallelHintChordMatBase.clone()));
+
+  function addRailTick(hData, elevation) {
+    const ax = railAxisFromRotY(hData.rotY);
+    const a = new THREE.Vector3(hData.x, elevation, hData.z).addScaledVector(ax, -HURDLE_RAIL_HALF);
+    const b = new THREE.Vector3(hData.x, elevation, hData.z).addScaledVector(ax, HURDLE_RAIL_HALF);
+    const gm = new THREE.BufferGeometry().setFromPoints([a, b]);
+    group.add(new THREE.Line(gm, railMat));
+  }
+
+  addRailTick(prev, yRail);
+  addRailTick(curr, yRail + 0.01);
+
+  scene.add(group);
+  parallelHintsGroup = group;
+}
 
 const M = {
   post:    new THREE.MeshStandardMaterial({ color: 0xfaf3e0, roughness: 0.55, metalness: 0 }),
@@ -675,6 +951,8 @@ const M = {
   handle:  new THREE.MeshBasicMaterial({ color: ACCENT_HEX, transparent: true, opacity: 0 }),
   ring:    new THREE.MeshBasicMaterial({ color: ACCENT_HEX, side: THREE.DoubleSide, transparent: true, opacity: 0 }),
   ringInner: new THREE.MeshBasicMaterial({ color: ACCENT_HEX, side: THREE.DoubleSide, transparent: true, opacity: 0 }),
+  /** Invisible footing — hurdles use this for dependable ray-hit when dragging/moving */
+  pick: new THREE.MeshBasicMaterial({ visible: false, depthWrite: false }),
 };
 
 function makeHurdle(h) {
@@ -707,6 +985,13 @@ function makeHurdle(h) {
   for (let i = -1; i <= 1; i++) {
     addBox(M.post, 0.08, 0.4, 0.08, i * 0.85, 1.1, 0);
   }
+
+  // Wide invisible footing so picking/drag-move works reliably (thin rails ray-miss from many angles).
+  const pickSlab = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.22, 4.5), M.pick);
+  pickSlab.name = 'pickSlab';
+  pickSlab.position.set(0, 0.11, 0);
+  pickSlab.userData.hid = h.id;
+  g.add(pickSlab);
 
   // ── Selection ring (ground, glowing) ──
   const ring = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.15, 64), M.ring.clone());
@@ -755,19 +1040,8 @@ function makeHurdle(h) {
   g.rotation.y = h.rotY * Math.PI / 180;
   scene.add(g);
   hObjs.set(h.id, g);
-
-  // Pop-in animation
-  g.scale.setScalar(0.01);
-  const startTime = performance.now();
-  function popIn() {
-    const t = (performance.now() - startTime) / 280;
-    if (t >= 1) { g.scale.setScalar(1); return; }
-    const eased = 1 - Math.pow(1 - t, 3);
-    const overshoot = 1 + (1 - t) * 0.15 * Math.sin(t * Math.PI * 2);
-    g.scale.setScalar(eased * overshoot);
-    requestAnimationFrame(popIn);
-  }
-  popIn();
+  /* Full scale from frame one so raycasting can grab the fence immediately after place. */
+  g.scale.setScalar(1);
 }
 
 function rmHurdle(id) {
@@ -781,9 +1055,94 @@ function syncTransform(h) {
   const o = hObjs.get(h.id); if (!o) return;
   o.position.set(h.x, 0, h.z);
   o.rotation.y = h.rotY * Math.PI / 180;
+  updateParallelHints();
+}
+
+function syncSensor(kind) {
+  const data = kind === 'start' ? startSensor : finishSensor;
+  const o = sensorObjs[kind]; if (!o || !data) return;
+  o.position.set(data.x, 0, data.z);
+  o.rotation.y = data.rotY * Math.PI / 180;
+}
+
+function makeSensor(kind) {
+  rmSensor(kind);
+  const data = kind === 'start' ? startSensor : finishSensor;
+  if (!data) return;
+  const g = new THREE.Group();
+  const col = kind === 'start' ? 0x2e7d4f : 0xc0392b;
+  const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.5 });
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.6, 12), mat);
+  post.position.set(0, 0.3, 0);
+  post.castShadow = true;
+  g.add(post);
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.06, 32), mat);
+  disc.position.set(0, 0.04, 0);
+  disc.receiveShadow = true;
+  disc.castShadow = true;
+  g.add(disc);
+
+  const pickPad = new THREE.Mesh(new THREE.CylinderGeometry(2.95, 2.95, 0.06, 40), M.pick);
+  pickPad.name = 'sensorPickPad';
+  pickPad.rotation.x = Math.PI / 2;
+  pickPad.position.set(0, 0.065, 0);
+  g.add(pickPad);
+
+  g.userData = { sensorKind: kind, type: 'sensor' };
+
+  const ringMat = new THREE.MeshBasicMaterial({ color: ACCENT_HEX, side: THREE.DoubleSide, transparent: true, opacity: 0 });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.1, 48), ringMat.clone());
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.05;
+  ring.name = 'sensorRing';
+  g.add(ring);
+  const handleGroup = new THREE.Group();
+  handleGroup.name = 'sensorRotHandle';
+  handleGroup.userData = { sensorKind: kind, type: 'sensorRotateHandle' };
+  const stemMat = M.handle.clone();
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 8), stemMat);
+  stem.position.set(0, 0.1, -1.05);
+  stem.rotation.x = Math.PI / 2;
+  handleGroup.add(stem);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.35, 10), stemMat);
+  head.position.set(0, 0.1, -1.8);
+  head.rotation.x = -Math.PI / 2;
+  handleGroup.add(head);
+  const hitArea = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 1.6), new THREE.MeshBasicMaterial({ visible: false }));
+  hitArea.position.set(0, 0.22, -1.35);
+  hitArea.userData = { sensorKind: kind, type: 'sensorRotateHandle' };
+  handleGroup.add(hitArea);
+  g.add(handleGroup);
+
+  g.position.set(data.x, 0, data.z);
+  g.rotation.y = data.rotY * Math.PI / 180;
+  scene.add(g);
+  sensorObjs[kind] = g;
+}
+
+function rmSensor(kind) {
+  const o = sensorObjs[kind];
+  if (!o) return;
+  o.traverse(c => { if (c.geometry && c.geometry.dispose) c.geometry.dispose(); });
+  scene.remove(o);
+  sensorObjs[kind] = null;
 }
 
 function setSelectionVisuals() {
+  ['start','finish'].forEach(k => {
+    const o = sensorObjs[k]; if (!o) return;
+    const r = o.getObjectByName('sensorRing');
+    const handle = o.getObjectByName('sensorRotHandle');
+    const sel = selectedSensor === k;
+    const hov = false;
+    if (r) r.material.opacity = sel ? 0.85 : (hov ? 0.25 : 0);
+    if (handle) {
+      handle.children.forEach(c => {
+        if (c.material && c.material.opacity !== undefined)
+          c.material.opacity = sel ? 1 : 0;
+      });
+    }
+  });
   hObjs.forEach((o, id) => {
     const r = o.getObjectByName('ring');
     const ir = o.getObjectByName('innerRing');
@@ -801,13 +1160,25 @@ function setSelectionVisuals() {
       });
     }
   });
+  updateParallelHints();
 }
 
 function updatePath() {
   if (pathLine) { scene.remove(pathLine); pathLine.geometry.dispose(); pathLine = null; }
-  if (hurdles.length < 2) return;
-  const pts = hurdles.map(h => new THREE.Vector3(h.x, 0.12, h.z));
-  pts.push(new THREE.Vector3(hurdles[0].x, 0.12, hurdles[0].z));
+  if (hurdles.length === 0) return;
+  const pts = [];
+  if (startSensor)
+    pts.push(new THREE.Vector3(startSensor.x, 0.12, startSensor.z));
+  for (let i = 0; i < hurdles.length; i++)
+    pts.push(new THREE.Vector3(hurdles[i].x, 0.12, hurdles[i].z));
+  if (finishSensor) {
+    pts.push(new THREE.Vector3(finishSensor.x, 0.12, finishSensor.z));
+  } else if (hurdles.length > 1) {
+    pts.push(new THREE.Vector3(hurdles[0].x, 0.12, hurdles[0].z));
+  } else if (hurdles.length === 1 && startSensor) {
+    pts.push(new THREE.Vector3(startSensor.x, 0.12, startSensor.z));
+  }
+  if (pts.length < 2) return;
   pathLine = new THREE.Line(
     new THREE.BufferGeometry().setFromPoints(pts),
     new THREE.LineBasicMaterial({ color: ACCENT_HEX, opacity: 0.7, transparent: true, linewidth: 2 })
@@ -869,33 +1240,66 @@ function hitGround(cx, cy) {
 
 function hitScene(cx, cy) {
   setMouse(cx, cy);
-  // Test rotation handle of selected first (priority)
+
+  if (selectedSensor) {
+    const og = sensorObjs[selectedSensor];
+    if (og) {
+      const handle = og.getObjectByName('sensorRotHandle');
+      if (handle) {
+        const meshes = []; handle.traverse(c => { if (c.isMesh) meshes.push(c); });
+        const rh = rc.intersectObjects(meshes, false);
+        if (rh.length) return { type: 'sensorRotateHandle', kind: selectedSensor };
+      }
+    }
+  }
+
   if (selectedId) {
     const sel = hObjs.get(selectedId);
     if (sel) {
       const handle = sel.getObjectByName('rotHandle');
       if (handle) {
-        const ms = [];
-        handle.traverse(c => { if (c.isMesh) ms.push(c); });
-        const hit = rc.intersectObjects(ms, false);
+        const meshes = []; handle.traverse(c => { if (c.isMesh) meshes.push(c); });
+        const hit = rc.intersectObjects(meshes, false);
         if (hit.length) return { type: 'rotateHandle', hid: selectedId };
       }
     }
   }
-  // Then any hurdle body
-  const ms = [];
+
+  let bestSens = null, bestSensDist = Infinity;
+  ['start', 'finish'].forEach(k => {
+    const g = sensorObjs[k];
+    if (!g) return;
+    const meshes = [];
+    g.children.forEach(c => {
+      if (c.name === 'sensorRotHandle') return;
+      c.traverse(ch => { if (ch.isMesh) meshes.push(ch); });
+    });
+    const sh = rc.intersectObjects(meshes, false);
+    if (sh.length && sh[0].distance < bestSensDist) {
+      bestSensDist = sh[0].distance;
+      bestSens = k;
+    }
+  });
+
+  const hMeshes = [];
   hObjs.forEach((o, hid) => {
     o.children.forEach(c => {
-      if (c.name === 'rotHandle' || c.name === 'ring' || c.name === 'innerRing') return;
-      c.traverse(child => { if (child.isMesh) ms.push(child); });
+      if (c.name === 'rotHandle') return;
+      c.traverse(child => { if (child.isMesh) hMeshes.push(child); });
     });
   });
-  const hit = rc.intersectObjects(ms, false);
-  if (hit.length) {
-    let cur = hit[0].object;
+  const hHit = rc.intersectObjects(hMeshes, false);
+  if (hHit.length && bestSens !== null) {
+    const hurdleDist = hHit[0].distance;
+    // Prefer hurdles when ties are ambiguous: sensor discs intersect many rays broadly.
+    if (bestSensDist + 0.35 < hurdleDist) return { type: 'sensor', kind: bestSens };
+  }
+  if (hHit.length) {
+    let cur = hHit[0].object;
     while (cur && !cur.userData.hid) cur = cur.parent;
     if (cur && cur.userData.hid) return { type: 'hurdle', hid: cur.userData.hid };
   }
+  if (bestSens !== null) return { type: 'sensor', kind: bestSens };
   return null;
 }
 
@@ -904,10 +1308,17 @@ function hitScene(cx, cy) {
 // ═══════════════════════════════════════════════════════════════════════
 const ms = {
   down: false, sx: 0, sy: 0, cx: 0, cy: 0, btn: 0, drag: false, shift: false,
-  mode: null, // 'orbit' | 'pan' | 'move' | 'rotate' | null
+  mode: null, // 'orbit' | 'pan' | 'move' | 'rotate' | 'moveSensor' | 'rotateSensor' | null
   hid: null,
+  sensorKind: null,
   rotStartAngle: 0, rotStartRot: 0,
+  /** Set on left pointerdown when grabbing a hurdle/sensor so pointerup miss does not clear selection. */
+  downPick: null,
+  /** Adjust: empty-ground press with selection — becomes drag-move after threshold */
+  pendingGroundGrab: null,
 };
+
+let hoveredSensor = null;
 
 function gcp(e) { const r = wrap.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 
@@ -918,7 +1329,8 @@ canvas.addEventListener('pointerdown', e => {
   const [x, y] = gcp(e);
   ms.down = true; ms.sx = ms.cx = x; ms.sy = ms.cy = y;
   ms.btn = e.button; ms.drag = false; ms.shift = e.shiftKey;
-  ms.mode = null; ms.hid = null;
+  ms.mode = null; ms.hid = null; ms.downPick = null;
+  ms.pendingGroundGrab = null;
 
   if (e.button === 2) {
     ms.mode = e.shiftKey ? 'pan' : 'orbit';
@@ -933,23 +1345,56 @@ canvas.addEventListener('pointerdown', e => {
 
   // Left click: check what was hit
   const h = hitScene(x, y);
-  if (h && h.type === 'rotateHandle') {
+  if (h && h.type === 'sensorRotateHandle') {
+    const obj = sensorObjs[h.kind];
+    const groundHit = hitGround(x, y);
+    const data = h.kind === 'start' ? startSensor : finishSensor;
+    if (groundHit && obj && data) {
+      ms.mode = 'rotateSensor';
+      ms.sensorKind = h.kind;
+      ms.downPick = { type: 'sensor', kind: h.kind };
+      ms.rotStartAngle = Math.atan2(groundHit.x - obj.position.x, groundHit.z - obj.position.z);
+      ms.rotStartRot = data.rotY;
+      canvas.classList.add('rotating');
+    }
+  } else if (h && h.type === 'rotateHandle') {
     // Start rotate
     const obj = hObjs.get(h.hid);
     const groundHit = hitGround(x, y);
     if (groundHit) {
       ms.mode = 'rotate'; ms.hid = h.hid;
+      ms.downPick = { type: 'hurdle', id: h.hid };
       ms.rotStartAngle = Math.atan2(groundHit.x - obj.position.x, groundHit.z - obj.position.z);
       ms.rotStartRot = hurdles.find(hh => hh.id === h.hid).rotY;
       canvas.classList.add('rotating');
     }
+  } else if (h && h.type === 'sensor') {
+    if (selectedSensor !== h.kind) setSelSensor(h.kind);
+    ms.mode = 'moveSensor'; ms.sensorKind = h.kind;
+    ms.downPick = { type: 'sensor', kind: h.kind };
+    canvas.classList.add('grabbing');
   } else if (h && h.type === 'hurdle') {
     // Selecting / moving
-    if (selectedId !== h.hid) setSel(h.hid);
+    setSel(h.hid);
     ms.mode = 'move'; ms.hid = h.hid;
+    ms.downPick = { type: 'hurdle', id: h.hid };
     canvas.classList.add('grabbing');
+  } else if (placeMode === 'adjust') {
+    const gp = hitGround(x, y);
+    if (gp && Math.abs(gp.x) < arenaW / 2 - 1 && Math.abs(gp.z) < arenaH / 2 - 1) {
+      if (selectedId != null && !selectedSensor) {
+        ms.pendingGroundGrab = { kind: 'hurdle', id: selectedId };
+        ms.downPick = { type: 'hurdle', id: selectedId };
+      } else if (selectedSensor === 'start' && startSensor) {
+        ms.pendingGroundGrab = { kind: 'sensor', which: 'start' };
+        ms.downPick = { type: 'sensor', kind: 'start' };
+      } else if (selectedSensor === 'finish' && finishSensor) {
+        ms.pendingGroundGrab = { kind: 'sensor', which: 'finish' };
+        ms.downPick = { type: 'sensor', kind: 'finish' };
+      }
+    }
   }
-  // else: pending — could be place (on click) or orbit (on drag)
+  // else: pending leave — arena click handled on pointerup (no left-drag orbit — avoids stray spins)
 });
 
 canvas.addEventListener('pointermove', e => {
@@ -959,10 +1404,20 @@ canvas.addEventListener('pointermove', e => {
   if (!ms.down) {
     const h = hitScene(x, y);
     const newHov = h && h.type === 'hurdle' ? h.hid : null;
-    if (newHov !== hoveredId) {
-      hoveredId = newHov;
+    const newSensHov = h && h.type === 'sensor' ? h.kind : null;
+    let changed = newHov !== hoveredId || newSensHov !== hoveredSensor;
+    hoveredId = newHov;
+    hoveredSensor = newSensHov;
+    if (changed) {
+      ['start','finish'].forEach(k => {
+        const o = sensorObjs[k]; if (!o) return;
+        const r = o.getObjectByName('sensorRing');
+        const sel = selectedSensor === k;
+        const hov = hoveredSensor === k && !sel;
+        if (r) r.material.opacity = sel ? 0.85 : (hov ? 0.3 : 0);
+      });
       setSelectionVisuals();
-      canvas.classList.toggle('grab', !!hoveredId && !selectedId);
+      canvas.classList.toggle('grab', !!(hoveredId || hoveredSensor) && !selectedId && !selectedSensor);
     }
     return;
   }
@@ -973,8 +1428,17 @@ canvas.addEventListener('pointermove', e => {
 
   if (!ms.drag) return;
 
-  // Promote pending left-click to orbit if no hit
-  if (ms.btn === 0 && !ms.mode) { ms.mode = 'orbit'; canvas.classList.add('orbiting'); }
+  if (!ms.mode && ms.pendingGroundGrab) {
+    if (ms.pendingGroundGrab.kind === 'hurdle') {
+      ms.mode = 'move';
+      ms.hid = ms.pendingGroundGrab.id;
+      canvas.classList.add('grabbing');
+    } else if (ms.pendingGroundGrab.kind === 'sensor') {
+      ms.mode = 'moveSensor';
+      ms.sensorKind = ms.pendingGroundGrab.which;
+      canvas.classList.add('grabbing');
+    }
+  }
 
   if (ms.mode === 'orbit') {
     orb.tTheta -= dx * 0.008;
@@ -992,7 +1456,7 @@ canvas.addEventListener('pointermove', e => {
       if (h) {
         h.x = Math.max(-arenaW/2 + 1.8, Math.min(arenaW/2 - 1.8, p.x));
         h.z = Math.max(-arenaH/2 + 1.8, Math.min(arenaH/2 - 1.8, p.z));
-        syncTransform(h); updatePath(); updateInfoPanel(); updateStats();
+        syncTransform(h); updatePath(); updateInfoPanel(); refreshFei();
       }
     }
   } else if (ms.mode === 'rotate') {
@@ -1006,6 +1470,28 @@ canvas.addEventListener('pointermove', e => {
       h.rotY = ((ms.rotStartRot + delta) % 360 + 360) % 360;
       syncTransform(h); updateInfoPanel();
     }
+  } else if (ms.mode === 'moveSensor') {
+    const p = hitGround(x, y);
+    if (p && ms.sensorKind && (startSensor || finishSensor)) {
+      const fn = ms.sensorKind === 'start'
+        ? (sx, sz) => { startSensor.x = sx; startSensor.z = sz; }
+        : (sx, sz) => { finishSensor.x = sx; finishSensor.z = sz; };
+      fn(
+        Math.max(-arenaW/2 + 1.8, Math.min(arenaW/2 - 1.8, p.x)),
+        Math.max(-arenaH/2 + 1.8, Math.min(arenaH/2 - 1.8, p.z))
+      );
+      syncSensor(ms.sensorKind); updatePath(); updateInfoPanel(); refreshFei();
+    }
+  } else if (ms.mode === 'rotateSensor') {
+    const obj = sensorObjs[ms.sensorKind];
+    const p = hitGround(x, y);
+    const data = ms.sensorKind === 'start' ? startSensor : finishSensor;
+    if (p && obj && data) {
+      const angle = Math.atan2(p.x - obj.position.x, p.z - obj.position.z);
+      const delta = (angle - ms.rotStartAngle) * 180 / Math.PI;
+      data.rotY = ((ms.rotStartRot + delta) % 360 + 360) % 360;
+      syncSensor(ms.sensorKind); updateInfoPanel();
+    }
   }
 });
 
@@ -1014,21 +1500,59 @@ canvas.addEventListener('pointerup', e => {
   canvas.classList.remove('grabbing', 'orbiting', 'rotating');
 
   if (!ms.drag && ms.btn === 0) {
-    const [x, y] = gcp(e);
-    const h = hitScene(x, y);
+    if (placeMode === 'adjust' && ms.pendingGroundGrab) {
+      ms.pendingGroundGrab = null;
+      ms.downPick = null;
+      setSel(null);
+      setSelSensor(null);
+    } else {
+      const [x, y] = gcp(e);
+      const h = hitScene(x, y);
+      const keepPick =
+        (ms.downPick?.type === 'hurdle' && Number(ms.downPick.id) === Number(selectedId)) ||
+        (ms.downPick?.type === 'sensor' && ms.downPick.kind === selectedSensor);
     if (!h) {
-      // Place new hurdle on click
       const p = hitGround(x, y);
       if (p && Math.abs(p.x) < arenaW/2 - 1 && Math.abs(p.z) < arenaH/2 - 1) {
-        placeHurdle(p.x, p.z);
-      } else {
-        setSel(null); // click outside arena = deselect
+        if (placeMode === 'start') placeSensorAt('start', p.x, p.z);
+        else if (placeMode === 'finish') placeSensorAt('finish', p.x, p.z);
+        else if (placeMode === 'hurdle') placeHurdle(p.x, p.z);
+        else if (!keepPick) {
+          setSel(null);
+          setSelSensor(null);
+        }
+      } else if (!keepPick) {
+        setSel(null);
+        setSelSensor(null);
       }
     } else if (h.type === 'hurdle') {
-      setSel(h.hid);
+      if (!ms.drag && ms.downPick?.type === 'sensor' && ms.downPick.kind === selectedSensor) {
+        setSelSensor(selectedSensor);
+      } else {
+        setSel(h.hid);
+      }
+    } else if (h.type === 'sensor') {
+      if (
+        ms.downPick?.type === 'hurdle' &&
+        selectedId != null &&
+        Number(ms.downPick.id) === Number(selectedId)
+      ) {
+        setSel(selectedId);
+      } else {
+        setSelSensor(h.kind);
+      }
+    }
     }
   }
-  ms.down = false; ms.mode = null; ms.hid = null;
+  ms.pendingGroundGrab = null;
+  ms.down = false; ms.mode = null; ms.hid = null; ms.sensorKind = null; ms.downPick = null;
+});
+
+canvas.addEventListener('pointercancel', () => {
+  canvas.classList.remove('grabbing', 'orbiting', 'rotating');
+  ms.down = false; ms.mode = null; ms.hid = null; ms.sensorKind = null; ms.downPick = null;
+  ms.pendingGroundGrab = null;
+  ms.drag = false;
 });
 
 canvas.addEventListener('wheel', e => {
@@ -1040,9 +1564,17 @@ canvas.addEventListener('wheel', e => {
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); delSel(); }
-  else if (e.key.toLowerCase() === 'z' && (e.ctrlKey || e.metaKey || true)) { e.preventDefault(); undoLast(); }
-  else if (e.key === 'Escape') { setSel(null); }
-  else if (e.key.toLowerCase() === 'c') { toggleCombo(); }
+  else if (e.key.toLowerCase() === 'z') {
+    if (e.repeat) return;
+    e.preventDefault();
+    undoLast();
+  }
+  else if (e.key === 'Escape') {
+    ms.pendingGroundGrab = null;
+    setSel(null);
+    setSelSensor(null);
+  }
+  else if (e.key.toLowerCase() === 'c') { e.preventDefault(); toggleCombo(e); }
   else if (e.key.toLowerCase() === 'r') { resetCamera(); }
 });
 
@@ -1053,9 +1585,16 @@ function placeHurdle(wx, wz) {
   let label;
   if (comboMode) {
     label = comboMode.num + comboMode.suffix;
-    if (comboMode.suffix === 'a') comboMode = { num: comboMode.num, suffix: 'b' };
-    else if (comboMode.suffix === 'b') comboMode = { num: comboMode.num, suffix: 'c' };
-    else { comboMode = null; nextNum++; }
+    const triple = !!comboMode.triple;
+    if (comboMode.suffix === 'a') {
+      comboMode = { num: comboMode.num, suffix: 'b', triple };
+    } else if (comboMode.suffix === 'b') {
+      if (triple) comboMode = { num: comboMode.num, suffix: 'c', triple };
+      else { comboMode = null; nextNum++; }
+    } else {
+      comboMode = null;
+      nextNum++;
+    }
     updateComboBtn();
   } else {
     label = `${nextNum++}`;
@@ -1066,30 +1605,89 @@ function placeHurdle(wx, wz) {
   mkLabel(h);
   updatePath();
   setSel(h.id);
-  updateStats();
+  refreshFei();
   updateStatus();
   hideOnboard();
+  if (!comboMode) setPlaceMode('adjust');
+}
+
+function placeSensorAt(kind, wx, wz) {
+  const nx = Math.max(-arenaW/2 + 1.8, Math.min(arenaW/2 - 1.8, wx));
+  const nz = Math.max(-arenaH/2 + 1.8, Math.min(arenaH/2 - 1.8, wz));
+  if (kind === 'start') {
+    startSensor = { x: nx, z: nz, rotY: startSensor ? startSensor.rotY : 0 };
+    makeSensor('start');
+  } else {
+    finishSensor = { x: nx, z: nz, rotY: finishSensor ? finishSensor.rotY : 0 };
+    makeSensor('finish');
+  }
+  updatePath();
+  setSelSensor(kind);
+  refreshFei();
+  updateStatus();
+  hideOnboard();
+  setPlaceMode('adjust');
 }
 
 function setSel(id) {
   selectedId = id;
+  selectedSensor = null;
   setSelectionVisuals();
   updateInfoPanel();
   updateStatus();
 }
 
+function setSelSensor(kind) {
+  selectedSensor = kind;
+  if (kind != null) selectedId = null;
+  setSelectionVisuals();
+  updateInfoPanel();
+  updateStatus();
+}
+
+function setPlaceMode(mode) {
+  placeMode = mode;
+  if (comboMode && mode !== 'hurdle') {
+    comboMode = null;
+    updateComboBtn();
+  }
+  document.getElementById('btn-place-adjust').classList.toggle('active', mode === 'adjust');
+  document.getElementById('btn-place-hurdle').classList.toggle('active', mode === 'hurdle');
+  document.getElementById('btn-place-start').classList.toggle('active', mode === 'start');
+  document.getElementById('btn-place-finish').classList.toggle('active', mode === 'finish');
+  updateInfoPanel();
+  updateStatus();
+}
+
 function stepRot(deg) {
-  const h = hurdles.find(h => h.id === selectedId); if (!h) return;
+  if (selectedSensor === 'start' && startSensor) {
+    startSensor.rotY = (startSensor.rotY + deg + 360) % 360;
+    syncSensor('start'); updateInfoPanel(); return;
+  }
+  if (selectedSensor === 'finish' && finishSensor) {
+    finishSensor.rotY = (finishSensor.rotY + deg + 360) % 360;
+    syncSensor('finish'); updateInfoPanel(); return;
+  }
+  const h = hurdles.find(h => h.id === selectedId);
+  if (!h) return;
   h.rotY = (h.rotY + deg + 360) % 360;
   syncTransform(h); updateInfoPanel();
 }
 
 function delSel() {
+  if (selectedSensor === 'start') {
+    startSensor = null; rmSensor('start'); selectedSensor = null;
+    updatePath(); updateInfoPanel(); refreshFei(); updateStatus(); setSelectionVisuals(); return;
+  }
+  if (selectedSensor === 'finish') {
+    finishSensor = null; rmSensor('finish'); selectedSensor = null;
+    updatePath(); updateInfoPanel(); refreshFei(); updateStatus(); setSelectionVisuals(); return;
+  }
   if (!selectedId) return;
   hurdles = hurdles.filter(h => h.id !== selectedId);
   rmHurdle(selectedId); rmLabel(selectedId);
   updatePath(); selectedId = null;
-  updateInfoPanel(); updateStats(); updateStatus();
+  updateInfoPanel(); refreshFei(); updateStatus(); setSelectionVisuals();
 }
 
 function undoLast() {
@@ -1100,22 +1698,33 @@ function undoLast() {
   const n = parseInt(last.label);
   if (!isNaN(n) && !last.label.match(/[a-c]$/)) { nextNum = n; comboMode = null; }
   if (selectedId === last.id) selectedId = null;
-  updateInfoPanel(); updateStats(); updateStatus(); updateComboBtn();
+  updateInfoPanel(); refreshFei(); updateStatus(); updateComboBtn(); setSelectionVisuals();
   if (hurdles.length === 0) showOnboard();
 }
 
 function clearAll() {
-  if (hurdles.length && !confirm('Clear all hurdles?')) return;
+  const has = hurdles.length || startSensor || finishSensor;
+  if (has && !confirm('Clear all hurdles and start/finish sensors?')) return;
+  ms.pendingGroundGrab = null;
   hurdles.forEach(h => { rmHurdle(h.id); rmLabel(h.id); });
-  hurdles = []; updatePath();
+  hurdles = [];
+  rmSensor('start'); rmSensor('finish');
+  startSensor = null; finishSensor = null;
+  selectedSensor = null;
+  updatePath();
   selectedId = null; nextNum = 1; comboMode = null;
-  updateInfoPanel(); updateStats(); updateStatus(); updateComboBtn();
+  updateInfoPanel(); refreshFei(); updateStatus(); updateComboBtn(); setSelectionVisuals();
   showOnboard();
 }
 
-function toggleCombo() {
-  if (comboMode) comboMode = null;
-  else comboMode = { num: nextNum, suffix: 'a' };
+function toggleCombo(ev) {
+  if (comboMode) {
+    comboMode = null;
+  } else {
+    const triple = !!(ev && ev.shiftKey);
+    comboMode = { num: nextNum, suffix: 'a', triple };
+    setPlaceMode('hurdle');
+  }
   updateComboBtn(); updateStatus();
 }
 
@@ -1129,42 +1738,426 @@ function updateComboBtn() {
 // ═══════════════════════════════════════════════════════════════════════
 function updateInfoPanel() {
   const info = document.getElementById('info');
+  const labelEl = document.getElementById('info-label');
+  const orderEl = document.getElementById('info-order');
   const h = hurdles.find(h => h.id === selectedId);
-  if (!h) { info.classList.remove('show'); return; }
+  let data = null;
+
+  if (selectedSensor === 'start' && startSensor) {
+    data = startSensor;
+    labelEl.textContent = 'Gate';
+    document.getElementById('info-num').textContent = 'START';
+    orderEl.textContent = 'Sensor';
+    orderEl.style.color = 'var(--text)';
+    info.classList.remove('inspector-empty');
+  } else if (selectedSensor === 'finish' && finishSensor) {
+    data = finishSensor;
+    labelEl.textContent = 'Gate';
+    document.getElementById('info-num').textContent = 'FINISH';
+    orderEl.textContent = 'Sensor';
+    orderEl.style.color = 'var(--text)';
+    info.classList.remove('inspector-empty');
+  } else if (h) {
+    labelEl.textContent = 'Hurdle';
+    document.getElementById('info-num').textContent = h.label;
+    orderEl.textContent = `${hurdles.indexOf(h) + 1}/${hurdles.length}`;
+    orderEl.style.color = 'var(--text)';
+    info.classList.remove('inspector-empty');
+    data = { x: h.x, z: h.z, rotY: h.rotY };
+  } else {
+    labelEl.textContent = 'Selection';
+    document.getElementById('info-num').textContent = 'Nothing selected';
+    orderEl.textContent = hurdles.length ? 'Click a hurdle or gate' : 'Place from the dock';
+    orderEl.style.color = 'var(--text-dim)';
+    document.getElementById('info-x').textContent = '—';
+    document.getElementById('info-z').textContent = '—';
+    document.getElementById('info-rot').textContent = '—';
+    info.classList.add('inspector-empty');
+    info.classList.add('show');
+    return;
+  }
+
   info.classList.add('show');
-  document.getElementById('info-num').textContent = h.label;
-  document.getElementById('info-order').textContent = `${hurdles.indexOf(h) + 1}/${hurdles.length}`;
-  document.getElementById('info-x').textContent = h.x.toFixed(1) + 'm';
-  document.getElementById('info-z').textContent = h.z.toFixed(1) + 'm';
-  document.getElementById('info-rot').textContent = Math.round(h.rotY) + '°';
+  document.getElementById('info-x').textContent = data.x.toFixed(1) + 'm';
+  document.getElementById('info-z').textContent = data.z.toFixed(1) + 'm';
+  document.getElementById('info-rot').textContent = Math.round(data.rotY) + '°';
 }
 
 function updateStatus() {
   const s = document.getElementById('status');
   if (comboMode) {
-    s.innerHTML = `Combo mode · click to place <span class="accent">${comboMode.num}${comboMode.suffix}</span>`;
+    const kind = comboMode.triple ? 'triple' : 'double';
+    s.innerHTML = `Combo (${kind}) · place <span class="accent">${comboMode.num}${comboMode.suffix}</span>`;
+  } else if (placeMode === 'start') {
+    s.innerHTML = `Place <span class="accent">start</span> · click arena (one only)`;
+  } else if (placeMode === 'finish') {
+    s.innerHTML = `Place <span class="accent">finish</span> · click arena (one only)`;
   } else if (selectedId) {
     const h = hurdles.find(h => h.id === selectedId);
-    s.innerHTML = `Hurdle <span class="accent">${h.label}</span> · drag to move · drag arrow to rotate`;
+    s.innerHTML = `Hurdle <span class="accent">${h.label}</span> · turf drag slides · snag posts or arrow rotates`;
+  } else if (selectedSensor === 'start') {
+    s.innerHTML = `Start gate · turf-drag or pad to slide · arrow rotates`;
+  } else if (selectedSensor === 'finish') {
+    s.innerHTML = `Finish gate · turf-drag or pad to slide · arrow rotates`;
+  } else if (placeMode === 'adjust') {
+    s.innerHTML = `Adjust · drag turf or hurdle to reposition · teal arrow rotates · Fence adds hurdles`;
   } else {
-    s.innerHTML = `Click anywhere to place hurdle <span class="accent">${nextNum}</span>`;
+    s.innerHTML = `Click arena to place hurdle <span class="accent">${nextNum}</span>`;
   }
 }
 
+function hypot(dx, dz) {
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+function ridingPathPts() {
+  if (!hurdles.length) return [];
+  const pts = [];
+  if (startSensor) pts.push({ x: startSensor.x, z: startSensor.z });
+  hurdles.forEach((h) => pts.push({ x: h.x, z: h.z }));
+  if (finishSensor) {
+    pts.push({ x: finishSensor.x, z: finishSensor.z });
+  } else if (hurdles.length > 1) {
+    pts.push({ x: hurdles[0].x, z: hurdles[0].z });
+  } else if (hurdles.length === 1 && startSensor) {
+    pts.push({ x: startSensor.x, z: startSensor.z });
+  }
+  return pts;
+}
+
+function ridingPathDistM() {
+  const pts = ridingPathPts();
+  let d = 0;
+  for (let i = 1; i < pts.length; i++) {
+    d += hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
+  }
+  return d;
+}
+
+function parseObstacleLabel3d(label) {
+  const m = /^(\d+)([abc])?$/i.exec(String(label ?? '').trim());
+  if (!m) return null;
+  return { num: parseInt(m[1], 10), suffix: (m[2] || '').toLowerCase() };
+}
+
+function groupHurdlesIntoObstacles3d(list) {
+  const groups = [];
+  let i = 0;
+  while (i < list.length) {
+    const p = parseObstacleLabel3d(list[i].label);
+    if (!p) {
+      groups.push([list[i]]);
+      i++;
+      continue;
+    }
+    const base = p.num;
+    let j = i;
+    while (j + 1 < list.length) {
+      const p2 = parseObstacleLabel3d(list[j + 1].label);
+      if (!p2 || p2.num !== base) break;
+      j++;
+    }
+    groups.push(list.slice(i, j + 1));
+    i = j + 1;
+  }
+  return groups;
+}
+
+function feiTotalsFromGroups3d(groups) {
+  let singles = 0, doubles = 0, triples = 0, efforts = 0;
+  let invalidCombo = false;
+  for (const g of groups) {
+    efforts += g.length;
+    if (g.length === 1) singles++;
+    else if (g.length === 2) doubles++;
+    else if (g.length === 3) triples++;
+    else invalidCombo = true;
+  }
+  return { obstacleCount: groups.length, efforts, singles, doubles, triples, invalidCombo };
+}
+
+function comboSpacingIssues3d(groups) {
+  const out = [];
+  groups.forEach((g, gi) => {
+    if (g.length < 2) return;
+    for (let k = 0; k < g.length - 1; k++) {
+      const a = g[k], b = g[k + 1];
+      const d = hypot(b.x - a.x, b.z - a.z);
+      if (d < 7 || d > 11) {
+        out.push({
+          level: 'warn',
+          msg: `Combination ${gi + 1}: ~${d.toFixed(1)} m between elements (typical ~7–11 m).`,
+          fix: 'Adjust spacing between combination elements when possible.',
+        });
+      }
+    }
+  });
+  return out;
+}
+
+function sharpTurnIssues3d(pts, minTurnDeg = 38) {
+  const out = [];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const ax = pts[i].x - pts[i - 1].x, az = pts[i].z - pts[i - 1].z;
+    const bx = pts[i + 1].x - pts[i].x, bz = pts[i + 1].z - pts[i].z;
+    const la = hypot(ax, az), lb = hypot(bx, bz);
+    if (la < 0.5 || lb < 0.5) continue;
+    const dot = (ax * bx + az * bz) / (la * lb);
+    const ang = Math.acos(Math.max(-1, Math.min(1, dot))) * (180 / Math.PI);
+    if (ang < minTurnDeg) {
+      out.push({
+        level: 'warn',
+        msg: `Sharp bend (~${ang.toFixed(0)}°) along the path near point ${i + 1}.`,
+        fix: 'Widen the track so horses can balance between fences.',
+      });
+    }
+  }
+  return out;
+}
+
+function wallProximityIssues3d(pts, aw, ah, minClearM = 2.8) {
+  const hw = aw / 2, hh = ah / 2;
+  const out = [];
+  pts.forEach((p, i) => {
+    const clear = Math.min(hw - Math.abs(p.x), hh - Math.abs(p.z));
+    if (clear < minClearM) {
+      out.push({
+        level: 'warn',
+        msg: `Path point ${i + 1} is ~${clear.toFixed(1)} m inside the rail.`,
+        fix: 'Keep more margin from the arena edge.',
+      });
+    }
+  });
+  return out;
+}
+
+function approachLandingIssues3d(pts, hasStart, hasFinish) {
+  if (pts.length < 2) return [];
+  const segs = [];
+  for (let i = 1; i < pts.length; i++) {
+    segs.push(hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
+  }
+  const n = segs.length;
+  const out = [];
+  if (hasStart && n >= 1 && segs[0] < 12) {
+    out.push({
+      level: 'warn',
+      msg: `Approach to the first obstacle is ~${segs[0].toFixed(1)} m.`,
+      fix: 'Move the start farther back on the line to fence 1.',
+    });
+  }
+  for (let i = 1; i < n - 1; i++) {
+    if (segs[i] < 10) {
+      out.push({
+        level: 'warn',
+        msg: `Riding segment ${i + 1} is ~${segs[i].toFixed(1)} m along the path.`,
+        fix: 'Lengthen the line between those obstacles.',
+      });
+    }
+  }
+  if (hasFinish && n >= 1) {
+    const last = segs[n - 1];
+    if (last < 8) {
+      out.push({
+        level: 'warn',
+        msg: `Only ~${last.toFixed(1)} m from last obstacle to finish.`,
+        fix: 'Place the finish farther along the getaway.',
+      });
+    }
+  }
+  return out;
+}
+
+function computeFeiBundle3d() {
+  const speed = Math.max(0, +document.getElementById('p-speed').value || 0);
+  const heightM = +document.getElementById('p-height').value || 0;
+  const groups = groupHurdlesIntoObstacles3d(hurdles);
+  const totals = feiTotalsFromGroups3d(groups);
+  const lengthM = ridingPathDistM();
+  const timeAllowedSec = speed > 0 && lengthM > 0 ? Math.round((lengthM / speed) * 60) : 0;
+  const timeLimitSec = timeAllowedSec > 0 ? Math.round(timeAllowedSec * 2) : 0;
+  const pts = ridingPathPts();
+  const issues = [];
+  const hasCourse = hurdles.length > 0;
+
+  if (!hasCourse) {
+    return {
+      hasCourse: false, lengthM, speed, heightM, timeAllowedSec: 0, timeLimitSec: 0,
+      ...totals, issues, overall: null,
+    };
+  }
+
+  if (!speed) {
+    issues.push({ level: 'invalid', msg: 'Speed must be positive (m/min).', fix: 'Pick a preset or enter a custom speed.' });
+  }
+  if (lengthM <= 0) {
+    issues.push({ level: 'invalid', msg: 'Path length is zero.', fix: 'Place multiple points along the riding line.' });
+  }
+  if (!Number.isFinite(heightM) || document.getElementById('p-height').value === '') {
+    issues.push({ level: 'invalid', msg: 'Height must be a number.', fix: 'Enter obstacle height in meters.' });
+  } else if (heightM < 0.3 || heightM > 1.6) {
+    issues.push({
+      level: 'invalid',
+      msg: `Height ${heightM.toFixed(2)} m is outside 0.30–1.60 m project limits.`,
+      fix: 'Adjust height for simulator compatibility.',
+    });
+  }
+  if (totals.invalidCombo) {
+    issues.push({
+      level: 'invalid',
+      msg: 'A combination has more than three elements.',
+      fix: 'Use doubles or triples only in this designer.',
+    });
+  }
+
+  hurdles.forEach((h) => {
+    if (!parseObstacleLabel3d(h.label)) {
+      issues.push({
+        level: 'warn',
+        msg: `"${h.label}" is not FEI-style numbering.`,
+        fix: 'Use digits with optional a/b/c suffix.',
+      });
+    }
+  });
+
+  issues.push(...comboSpacingIssues3d(groups));
+  if (pts.length >= 3) {
+    issues.push(...sharpTurnIssues3d(pts));
+    issues.push(...wallProximityIssues3d(pts, arenaW, arenaH));
+    issues.push(...approachLandingIssues3d(pts, !!startSensor, !!finishSensor));
+  }
+
+  let overall = 'valid';
+  if (issues.some((x) => x.level === 'invalid')) overall = 'invalid';
+  else if (issues.some((x) => x.level === 'warn')) overall = 'risky';
+
+  return {
+    hasCourse: true,
+    ...totals,
+    lengthM,
+    speed,
+    heightM,
+    timeAllowedSec,
+    timeLimitSec,
+    issues,
+    overall,
+  };
+}
+
+function syncSpeedChipUI() {
+  const v = +document.getElementById('p-speed').value;
+  const preset = [350, 375, 400].includes(v) ? v : null;
+  const map = [
+    ['chip-sp-indoor', 350],
+    ['chip-sp-out375', 375],
+    ['chip-sp-out400', 400],
+  ];
+  map.forEach(([id, n]) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('fei-chip-on', preset === n);
+  });
+  const c = document.getElementById('chip-sp-custom');
+  if (c) c.classList.toggle('fei-chip-on', preset === null);
+}
+
+function setSpeedPreset3d(n) {
+  document.getElementById('p-speed').value = n;
+  refreshFei();
+}
+
+function focusSpeedCustom() {
+  document.getElementById('p-speed').focus();
+  refreshFei();
+}
+
+function touchSpeedInput() {
+  refreshFei();
+}
+
+function renderFeiPanel() {
+  const fe = computeFeiBundle3d();
+  const emptyEl = document.getElementById('fei-empty');
+  const bodyEl = document.getElementById('fei-body');
+  if (!emptyEl || !bodyEl) return;
+
+  if (!fe.hasCourse) {
+    emptyEl.style.display = 'block';
+    bodyEl.style.display = 'none';
+    syncSpeedChipUI();
+    return;
+  }
+  emptyEl.style.display = 'none';
+  bodyEl.style.display = 'block';
+  syncSpeedChipUI();
+
+  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  set('fei-v-speed', fe.speed > 0 ? String(fe.speed) : '—');
+  set('fei-v-length', fe.lengthM > 0 ? fe.lengthM.toFixed(1) : '0');
+  set('fei-v-ta', fe.timeAllowedSec > 0 ? String(fe.timeAllowedSec) : '—');
+  set('fei-v-tl', fe.timeLimitSec > 0 ? String(fe.timeLimitSec) : '—');
+  set('fei-v-obs', String(fe.obstacleCount));
+  set('fei-v-eff', String(fe.efforts));
+  set('fei-v-singles', String(fe.singles));
+  set('fei-v-doubles', String(fe.doubles));
+  set('fei-v-triples', String(fe.triples));
+  set('fei-v-tobs', String(fe.obstacleCount));
+  set('fei-v-teff', String(fe.efforts));
+
+  const badge = document.getElementById('fei-val-status');
+  const issuesHost = document.getElementById('fei-issues');
+  const okLine = document.getElementById('fei-issues-ok');
+  if (badge) {
+    badge.classList.remove('fei-val-valid', 'fei-val-risky', 'fei-val-invalid');
+    if (fe.overall === 'invalid') {
+      badge.classList.add('fei-val-invalid');
+      badge.textContent = 'Invalid';
+    } else if (fe.overall === 'risky') {
+      badge.classList.add('fei-val-risky');
+      badge.textContent = 'Risky';
+    } else {
+      badge.classList.add('fei-val-valid');
+      badge.textContent = 'Valid';
+    }
+  }
+  if (issuesHost) {
+    issuesHost.innerHTML = fe.issues.length
+      ? fe.issues.map((it) => {
+        const cls = it.level === 'invalid' ? 'bad' : 'warn';
+        const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        return `<div class="fei-issue ${cls}"><div>${esc(it.msg)}</div><div class="fei-fix"><strong>Fix:</strong> ${esc(it.fix)}</div></div>`;
+      }).join('')
+      : '';
+  }
+  if (okLine) {
+    okLine.style.display = fe.issues.length ? 'none' : 'block';
+  }
+}
+
+function refreshFei() {
+  updateStats();
+  renderFeiPanel();
+}
+
 function updateStats() {
-  document.getElementById('stat-count').textContent = hurdles.length;
-  let dist = 0;
-  for (let i = 1; i < hurdles.length; i++) {
-    const dx = hurdles[i].x - hurdles[i-1].x;
-    const dz = hurdles[i].z - hurdles[i-1].z;
-    dist += Math.sqrt(dx*dx + dz*dz);
+  if (!hurdles.length) {
+    document.getElementById('stat-dist').textContent = '0m';
+    document.getElementById('stat-nums').textContent = '—';
+    document.getElementById('stat-eff').textContent = '—';
+    return;
   }
-  if (hurdles.length > 1) {
-    const dx = hurdles[0].x - hurdles[hurdles.length-1].x;
-    const dz = hurdles[0].z - hurdles[hurdles.length-1].z;
-    dist += Math.sqrt(dx*dx + dz*dz);
+
+  const pts = ridingPathPts();
+  const groups = groupHurdlesIntoObstacles3d(hurdles);
+  const t = feiTotalsFromGroups3d(groups);
+  document.getElementById('stat-nums').textContent = String(t.obstacleCount);
+  document.getElementById('stat-eff').textContent = String(t.efforts);
+
+  if (pts.length < 2) {
+    document.getElementById('stat-dist').textContent = '—';
+    return;
   }
-  document.getElementById('stat-dist').textContent = Math.round(dist) + 'm';
+  const dist = ridingPathDistM();
+  document.getElementById('stat-dist').textContent = (dist > 0 ? Math.round(dist) : 0) + 'm';
 }
 
 function showOnboard() { document.getElementById('onboard').style.display = 'block'; }
@@ -1174,15 +2167,18 @@ function hideOnboard() { document.getElementById('onboard').style.display = 'non
 // Export
 // ═══════════════════════════════════════════════════════════════════════
 function buildExportData() {
-  return {
+  const fe = computeFeiBundle3d();
+  const speed = +document.getElementById('p-speed').value;
+  const hgt = +document.getElementById('p-height').value;
+  const o = {
     courseInfo: {
       name: document.getElementById('course-name').value,
       arenaSize: `${arenaW}x${arenaH}m`,
-      speed_m_per_min: +document.getElementById('p-speed').value,
-      length_m: +document.getElementById('p-length').value,
-      timeAllowed_sec: +document.getElementById('p-time').value,
-      obstacleHeight_m: +document.getElementById('p-height').value,
-      totalObstacles: hurdles.length,
+      speed_m_per_min: Number.isFinite(speed) ? speed : 0,
+      length_m: fe.hasCourse && fe.lengthM > 0 ? +fe.lengthM.toFixed(2) : 0,
+      timeAllowed_sec: fe.timeAllowedSec || 0,
+      obstacleHeight_m: Number.isFinite(hgt) ? hgt : 0,
+      totalObstacles: fe.hasCourse ? fe.obstacleCount : 0,
     },
     hurdles: hurdles.map((h, i) => ({
       order: i + 1, label: h.label,
@@ -1190,6 +2186,19 @@ function buildExportData() {
       rotationY: Math.round(h.rotY),
     })),
   };
+  if (startSensor) {
+    o.startSensor = {
+      unityPosition: { x: +startSensor.x.toFixed(2), y: 0, z: +startSensor.z.toFixed(2) },
+      rotationY: Math.round(startSensor.rotY),
+    };
+  }
+  if (finishSensor) {
+    o.finishSensor = {
+      unityPosition: { x: +finishSensor.x.toFixed(2), y: 0, z: +finishSensor.z.toFixed(2) },
+      rotationY: Math.round(finishSensor.rotY),
+    };
+  }
+  return o;
 }
 
 function syntaxHighlight(json) {
@@ -1263,8 +2272,9 @@ function loop() {
 }
 loop();
 
-updateStats();
-updateStatus();
+setPlaceMode('adjust');
+updateInfoPanel();
+refreshFei();
 
 // Subtle camera intro animation
 let introT = 0;

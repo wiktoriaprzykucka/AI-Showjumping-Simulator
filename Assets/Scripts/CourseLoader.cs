@@ -30,9 +30,28 @@ public class CL_CourseInfo {
 }
 
 [System.Serializable]
+public class CL_SensorPlacement {
+    public CL_Vec3 unityPosition;
+    public float rotationY;
+}
+
+[System.Serializable]
 public class CL_Course {
     public CL_CourseInfo courseInfo;
     public CL_Hurdle[] hurdles;
+    /// <summary>Optional. When set, CourseLoader spawns a transform and assigns CoursePathManager.startPoint.</summary>
+    public CL_SensorPlacement startSensor;
+    /// <summary>Optional. When set, CourseLoader spawns a transform and assigns CoursePathManager.finishPoint.</summary>
+    public CL_SensorPlacement finishSensor;
+}
+
+/// <summary>Inspector presets for the auto-spawned finish-line trigger (Course_FinishSensor).</summary>
+public enum CourseFinishTriggerPreset {
+    Custom = 0,
+    Standard = 1,
+    Wide = 2,
+    Tall = 3,
+    Deep = 4,
 }
 
 // ─── Loader ────────────────────────────────────────────────────────────
@@ -124,6 +143,28 @@ public class CourseLoader : MonoBehaviour {
     [Tooltip("Drag your horse here and the hurdles array fills automatically")]
     public HorseAgent horseAgent;
 
+    [Tooltip("If set, start/finish transforms from JSON are assigned here after load (calls RebuildPath).")]
+    public CoursePathManager coursePathManager;
+
+    [Header("Start / finish sensors (JSON + ML)")]
+    [Tooltip("Empty `Course_StartSensor` / `Course_FinishSensor` objects are spawned under this loader when " +
+             "your `courseJson` includes `startSensor` / `finishSensor` (export from the course designers). " +
+             "Assign optional visual prefabs below so they are not invisible in the Scene view.")]
+    public GameObject startSensorVisualPrefab;
+    public GameObject finishSensorVisualPrefab;
+
+    [Tooltip("Quick size presets for the finish gate BoxCollider trigger. " +
+             "Non-Custom presets overwrite Width/Height/Depth whenever the Inspector validates — " +
+             "switch to **Custom** to keep manual sizes.")]
+    public CourseFinishTriggerPreset finishTriggerPreset = CourseFinishTriggerPreset.Standard;
+
+    [Tooltip("Finish trigger size in meters (local X). Overwritten by presets unless Preset = Custom.")]
+    public float finishTriggerWidth = 4f;
+    [Tooltip("Finish trigger size in meters (local Y). Overwritten by presets unless Preset = Custom.")]
+    public float finishTriggerHeight = 2.5f;
+    [Tooltip("Finish trigger size in meters (local Z, along gate forward). Overwritten by presets unless Preset = Custom.")]
+    public float finishTriggerDepth = 2f;
+
     [Header("Loading")]
     public bool loadOnAwake = true;
 
@@ -169,11 +210,46 @@ public class CourseLoader : MonoBehaviour {
     private List<Transform> spawned = new List<Transform>();
     private List<Transform> arenaObjects = new List<Transform>();
 
+    Transform loadedStartSensor;
+    Transform loadedFinishSensor;
+
     // Mastery-curriculum state (training only).
     private int curriculumIndex = 0;
     private TextAsset currentTrainingCourse;
     private int episodesOnCurrentCourse = 0;
     private readonly List<float> recentRewards = new List<float>();
+
+    /// <summary>Applies preset sizes to the finish trigger fields (inspector).</summary>
+    void OnValidate() {
+        ApplyFinishTriggerPreset();
+    }
+
+    void ApplyFinishTriggerPreset() {
+        if (finishTriggerPreset == CourseFinishTriggerPreset.Custom)
+            return;
+        switch (finishTriggerPreset) {
+            case CourseFinishTriggerPreset.Standard:
+                finishTriggerWidth = 4f;
+                finishTriggerHeight = 2.5f;
+                finishTriggerDepth = 2f;
+                break;
+            case CourseFinishTriggerPreset.Wide:
+                finishTriggerWidth = 8f;
+                finishTriggerHeight = 2.5f;
+                finishTriggerDepth = 2f;
+                break;
+            case CourseFinishTriggerPreset.Tall:
+                finishTriggerWidth = 4f;
+                finishTriggerHeight = 3.5f;
+                finishTriggerDepth = 2f;
+                break;
+            case CourseFinishTriggerPreset.Deep:
+                finishTriggerWidth = 4f;
+                finishTriggerHeight = 2.5f;
+                finishTriggerDepth = 4f;
+                break;
+        }
+    }
 
     void Awake() {
         // Strip camera sensors BEFORE the Agent's OnEnable initializes its sensor list.
@@ -274,6 +350,61 @@ public class CourseLoader : MonoBehaviour {
         } else {
             Debug.LogWarning("[CourseLoader] No HorseAgent assigned — drag your horse into the slot, or wire the array manually.");
         }
+
+        ApplySensorsAndPath(data);
+
+        if (horseAgent != null) {
+            horseAgent.finishGate = loadedFinishSensor;
+            if (loadedFinishSensor != null)
+                Debug.Log("[CourseLoader] Finish gate assigned for HorseAgent (" + loadedFinishSensor.name + ").");
+        }
+    }
+
+    void ApplySensorsAndPath(CL_Course data) {
+        if (data.startSensor != null) {
+            CL_Vec3 uv = data.startSensor.unityPosition;
+            Vector3 p = uv != null ? uv.ToVector3() : Vector3.zero;
+            loadedStartSensor = CreateCourseSensor("Course_StartSensor", p, data.startSensor.rotationY).transform;
+            if (coursePathManager != null) coursePathManager.startPoint = loadedStartSensor;
+        }
+
+        if (data.finishSensor != null) {
+            CL_Vec3 uv = data.finishSensor.unityPosition;
+            Vector3 p = uv != null ? uv.ToVector3() : Vector3.zero;
+            loadedFinishSensor = CreateCourseSensor("Course_FinishSensor", p, data.finishSensor.rotationY).transform;
+            if (coursePathManager != null) coursePathManager.finishPoint = loadedFinishSensor;
+        }
+
+        if (coursePathManager != null)
+            coursePathManager.RebuildPath();
+    }
+
+    GameObject CreateCourseSensor(string sensorName, Vector3 worldPos, float rotY) {
+        var go = new GameObject(sensorName);
+        go.transform.SetParent(transform);
+        go.transform.SetPositionAndRotation(worldPos, Quaternion.Euler(0f, rotY, 0f));
+
+        if (sensorName == "Course_FinishSensor") {
+            TrySetTag(go, "Finish");
+            var trig = new GameObject("FinishTrigger");
+            trig.transform.SetParent(go.transform);
+            trig.transform.localPosition = Vector3.zero;
+            trig.transform.localRotation = Quaternion.identity;
+            var col = trig.AddComponent<BoxCollider>();
+            col.isTrigger = true;
+            col.center = new Vector3(0f, finishTriggerHeight * 0.5f, 0f);
+            col.size = new Vector3(finishTriggerWidth, finishTriggerHeight, finishTriggerDepth);
+        }
+
+        GameObject visPrefab = sensorName == "Course_FinishSensor" ? finishSensorVisualPrefab : startSensorVisualPrefab;
+        if (visPrefab != null) {
+            GameObject viz = Instantiate(visPrefab, go.transform);
+            viz.transform.localPosition = Vector3.zero;
+            viz.transform.localRotation = Quaternion.identity;
+            viz.name = "SensorVisual"; // clearer in hierarchy than "(Clone)"
+        }
+
+        return go;
     }
 
     // Called by HorseAgent.OnEpisodeBegin during training. Decides whether to stay on the
@@ -393,9 +524,21 @@ public class CourseLoader : MonoBehaviour {
 
     [ContextMenu("Clear Course")]
     public void ClearCourse() {
+        if (coursePathManager != null) {
+            if (loadedStartSensor != null && coursePathManager.startPoint == loadedStartSensor)
+                coursePathManager.startPoint = null;
+            if (loadedFinishSensor != null && coursePathManager.finishPoint == loadedFinishSensor)
+                coursePathManager.finishPoint = null;
+        }
+        if (horseAgent != null && loadedFinishSensor != null && horseAgent.finishGate == loadedFinishSensor)
+            horseAgent.finishGate = null;
+        loadedStartSensor = null;
+        loadedFinishSensor = null;
+
         var toRemove = new List<GameObject>();
         foreach (Transform child in transform) {
-            if (child.name.StartsWith("Hurdle_") || child.name.StartsWith("Arena_"))
+            if (child.name.StartsWith("Hurdle_") || child.name.StartsWith("Arena_")
+                || child.name == "Course_StartSensor" || child.name == "Course_FinishSensor")
                 toRemove.Add(child.gameObject);
         }
         foreach (var go in toRemove) {

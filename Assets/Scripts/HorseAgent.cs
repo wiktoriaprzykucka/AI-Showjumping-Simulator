@@ -40,6 +40,9 @@ public class HorseAgent : Agent
     [Tooltip("Extra bonus when the hurdle is cleared while the horse is actually jumping/airborne.")]
     public float rewardJumpThroughHurdleBonus = 8f;
     public float rewardLap = 20f;
+    [Tooltip("One-time reward when the horse enters the finish gate trigger after clearing all hurdles. " +
+             "Episode ends on this event (instead of ending mid-jump on the last hurdle).")]
+    public float rewardFinishGate = 12f;
 
     [Header("Punishments (per step — KEEP SMALL or training stalls!)")]
     [Tooltip("Per-physics-step penalty when speed < stillThreshold. With 50fps physics, " +
@@ -88,12 +91,24 @@ public class HorseAgent : Agent
     public LayerMask groundLayer;
     public Transform[] hurdles;
 
+    [Tooltip("Optional. Assign the finish line transform (the object that has the finish trigger). " +
+             "CourseLoader auto-assigns this when your course JSON includes `finishSensor`. " +
+             "If null, behavior matches the legacy flow: episode ends as soon as the last hurdle is cleared.")]
+    public Transform finishGate;
+
     [Tooltip("Optional. Drag in your arena walls / corner markers (North, East, South, West). " +
              "If any are assigned, the agent observes wall clearance and is punished for leaving the arena. " +
              "Leave empty to disable arena awareness.")]
     public Transform[] boundaries;
 
     [Header("Spawn")]
+    [Tooltip("If set, used to read `startPoint` from the loaded course. If null, falls back to " +
+             "`courseLoader.coursePathManager` when available.")]
+    public CoursePathManager coursePathManager;
+    [Tooltip("When true and the path manager has a non-null startPoint (from JSON `startSensor`), " +
+             "the horse is placed in world space at that transform (plus jitter / spawnLocalPosition). " +
+             "When false or no start point, uses legacy local spawn under the agent's parent.")]
+    public bool spawnAtStartSensorWhenAvailable = true;
     public Vector3 spawnLocalPosition = new Vector3(0f, 1f, 0f);
     [Range(0f, 5f)] public float spawnPositionJitter = 1.0f;
     [Range(0f, 180f)] public float spawnYawJitterDeg = 15f;
@@ -175,6 +190,11 @@ public class HorseAgent : Agent
     private float prevDistToHurdle = float.MaxValue;
     private int lapsCompleted;
 
+    /// <summary>True after the last hurdle is cleared while a <see cref="finishGate"/> is set — agent runs to finish.</summary>
+    private bool awaitingFinish;
+    /// <summary>Prevents double reward / double EndEpisode if the finish trigger is hit more than once.</summary>
+    private bool finishConsumed;
+
     // Edge-detect for the out-of-arena penalty. Without this we'd charge `punishHitWall`
     // every physics step the horse spends outside (50 Hz × -0.2 = -10/sec), which dwarfs
     // every other reward signal and trains the policy to hug the inside walls.
@@ -194,10 +214,20 @@ public class HorseAgent : Agent
         thisEpisodeReward += r;
     }
 
-    private Transform NextHurdle =>
-        (hurdles != null && hurdles.Length > 0)
-            ? hurdles[currentHurdle % hurdles.Length]
+    /// <summary>The hurdle that must be cleared next (no modulo wrap — used for trigger matching only).</summary>
+    private Transform CurrentHurdleTransform =>
+        (hurdles != null && currentHurdle >= 0 && currentHurdle < hurdles.Length)
+            ? hurdles[currentHurdle]
             : null;
+
+    /// <summary>What the 18 vector observations and dense rewards aim at: current hurdle, or <see cref="finishGate"/> after the last clear.</summary>
+    private Transform NavigationTarget {
+        get {
+            if (awaitingFinish && finishGate != null)
+                return finishGate;
+            return CurrentHurdleTransform;
+        }
+    }
 
     // Cached axis-aligned rectangle computed from the boundaries array
     private bool hasBounds;
@@ -332,11 +362,26 @@ public class HorseAgent : Agent
             0f,
             Random.Range(-spawnPositionJitter, spawnPositionJitter));
 
-        transform.localPosition = spawnLocalPosition + jitter;
-        transform.localRotation = Quaternion.Euler(
-            0f,
-            Random.Range(-spawnYawJitterDeg, spawnYawJitterDeg),
-            0f);
+        CoursePathManager pathMgr = coursePathManager != null
+            ? coursePathManager
+            : (courseLoader != null ? courseLoader.coursePathManager : null);
+        Transform startPt = (spawnAtStartSensorWhenAvailable && pathMgr != null) ? pathMgr.startPoint : null;
+
+        if (startPt != null)
+        {
+            Vector3 localOffset = spawnLocalPosition + jitter;
+            Vector3 worldPos = startPt.position + startPt.rotation * localOffset;
+            float yaw = startPt.eulerAngles.y + Random.Range(-spawnYawJitterDeg, spawnYawJitterDeg);
+            transform.SetPositionAndRotation(worldPos, Quaternion.Euler(0f, yaw, 0f));
+        }
+        else
+        {
+            transform.localPosition = spawnLocalPosition + jitter;
+            transform.localRotation = Quaternion.Euler(
+                0f,
+                Random.Range(-spawnYawJitterDeg, spawnYawJitterDeg),
+                0f);
+        }
 
         if (rb != null)
         {
@@ -350,6 +395,8 @@ public class HorseAgent : Agent
         hurdleTimer = timePerHurdle;
         episodeTimer = maxEpisodeTime;
         lapsCompleted = 0;
+        awaitingFinish = false;
+        finishConsumed = false;
         prevDistToHurdle = float.MaxValue;
         wasOutsideArena = false;
     }
@@ -359,7 +406,7 @@ public class HorseAgent : Agent
     // ─────────────────────────────────────────────
     public override void CollectObservations(VectorSensor sensor)
     {
-        Transform target = NextHurdle;
+        Transform target = NavigationTarget;
 
         if (target == null || rb == null)
         {
@@ -441,7 +488,7 @@ public class HorseAgent : Agent
         jumpCooldown -= Time.fixedDeltaTime;
         if (isGrounded) hasJumped = false;
 
-        Transform target = NextHurdle;
+        Transform target = NavigationTarget;
         if (target == null || rb == null) return;
 
         float distNow = Vector3.Distance(transform.position, target.position);
@@ -563,11 +610,18 @@ public class HorseAgent : Agent
     // ─────────────────────────────────────────────
     private void OnTriggerEnter(Collider other)
     {
-        Transform target = NextHurdle;
+        if (awaitingFinish && !finishConsumed && finishGate != null &&
+            ColliderBelongsToFinishGate(other, finishGate))
+        {
+            finishConsumed = true;
+            AwardReward(rewardFinishGate);
+            EndEpisode();
+            return;
+        }
+
+        Transform target = CurrentHurdleTransform;
         if (target == null) return;
 
-        // Accept the collider if it IS the target hurdle or any child of it.
-        // (No more fragile name matching.)
         Transform t = other.transform;
         bool isTarget = t == target || t.IsChildOf(target);
         if (!isTarget) return;
@@ -584,9 +638,19 @@ public class HorseAgent : Agent
         {
             lapsCompleted++;
             AwardReward(rewardLap);
-            // End on lap complete — gives PPO a clean terminal success signal.
-            EndEpisode();
+            if (finishGate != null)
+                awaitingFinish = true;
+            else
+                EndEpisode();
         }
+    }
+
+    /// <summary>True if this collider is on <see cref="finishGate"/> or one of its children (finish trigger volumes).</summary>
+    static bool ColliderBelongsToFinishGate(Collider other, Transform finishGate)
+    {
+        if (finishGate == null || other == null) return false;
+        Transform tr = other.transform;
+        return tr == finishGate || tr.IsChildOf(finishGate);
     }
 
     private void OnCollisionEnter(Collision collision)
@@ -595,7 +659,6 @@ public class HorseAgent : Agent
             AwardReward(punishHitWall);
     }
 
-    // ─────────────────────────────────────────────
     public override void Heuristic(in ActionBuffers actionsOut)
     {
         var a = actionsOut.ContinuousActions;
@@ -628,9 +691,7 @@ public class HorseAgent : Agent
             Gizmos.DrawWireCube(c, s);
         }
 
-        if (hurdles == null || hurdles.Length == 0) return;
-
-        Transform t = hurdles[currentHurdle % hurdles.Length];
+        Transform t = NavigationTarget;
         if (t == null) return;
 
         Gizmos.color = Color.yellow;

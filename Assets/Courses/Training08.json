@@ -1,0 +1,159 @@
+{
+  "courseInfo": {
+    "name": "Training08",
+    "arenaSize": "100x55m",
+    "speed_m_per_min": 350,
+    "length_m": 390.7,
+    "timeAllowed_sec": 67,
+    "obstacleHeight_m": 1.4,
+    "totalObstacles": 11
+  },
+  "hurdles": [
+    {
+      "order": 1,
+      "label": "1",
+      "unityPosition": {
+        "x": 24.05,
+        "y": 0,
+        "z": 5.48
+      },
+      "rotationY": 120
+    },
+    {
+      "order": 2,
+      "label": "2",
+      "unityPosition": {
+        "x": -25.35,
+        "y": 0,
+        "z": -5.74
+      },
+      "rotationY": 30
+    },
+    {
+      "order": 3,
+      "label": "3",
+      "unityPosition": {
+        "x": -32.76,
+        "y": 0,
+        "z": 13.19
+      },
+      "rotationY": 240
+    },
+    {
+      "order": 4,
+      "label": "4",
+      "unityPosition": {
+        "x": 11.23,
+        "y": 0,
+        "z": 20.38
+      },
+      "rotationY": 285
+    },
+    {
+      "order": 5,
+      "label": "5",
+      "unityPosition": {
+        "x": 31.94,
+        "y": 0,
+        "z": 17.6
+      },
+      "rotationY": 285
+    },
+    {
+      "order": 6,
+      "label": "6a",
+      "unityPosition": {
+        "x": 8.53,
+        "y": 0,
+        "z": -3.6
+      },
+      "rotationY": 135
+    },
+    {
+      "order": 7,
+      "label": "6b",
+      "unityPosition": {
+        "x": 0.65,
+        "y": 0,
+        "z": 2.92
+      },
+      "rotationY": 135
+    },
+    {
+      "order": 8,
+      "label": "7",
+      "unityPosition": {
+        "x": -37.8,
+        "y": 0,
+        "z": -1.68
+      },
+      "rotationY": 330
+    },
+    {
+      "order": 9,
+      "label": "8a",
+      "unityPosition": {
+        "x": -14.14,
+        "y": 0,
+        "z": -21.94
+      },
+      "rotationY": 270
+    },
+    {
+      "order": 10,
+      "label": "8b",
+      "unityPosition": {
+        "x": -0.21,
+        "y": 0,
+        "z": -22.24
+      },
+      "rotationY": 270
+    },
+    {
+      "order": 11,
+      "label": "9",
+      "unityPosition": {
+        "x": 36.64,
+        "y": 0,
+        "z": -13.16
+      },
+      "rotationY": 210
+    },
+    {
+      "order": 12,
+      "label": "10",
+      "unityPosition": {
+        "x": 7.4,
+        "y": 0,
+        "z": 1.04
+      },
+      "rotationY": 45
+    },
+    {
+      "order": 13,
+      "label": "11",
+      "unityPosition": {
+        "x": -18.08,
+        "y": 0,
+        "z": -14.05
+      },
+      "rotationY": 75
+    }
+  ],
+  "startSensor": {
+    "unityPosition": {
+      "x": 38.09,
+      "y": 0,
+      "z": -0.12
+    },
+    "rotationY": 120
+  },
+  "finishSensor": {
+    "unityPosition": {
+      "x": -30.89,
+      "y": 0,
+      "z": -18.08
+    },
+    "rotationY": 75
+  }
+}

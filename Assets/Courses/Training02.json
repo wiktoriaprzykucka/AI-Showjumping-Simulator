@@ -1,0 +1,59 @@
+{
+  "courseInfo": {
+    "name": "Training02",
+    "arenaSize": "100x60m",
+    "speed_m_per_min": 350,
+    "length_m": 41.15,
+    "timeAllowed_sec": 7,
+    "obstacleHeight_m": 1,
+    "totalObstacles": 2
+  },
+  "hurdles": [
+    {
+      "order": 1,
+      "label": "1",
+      "unityPosition": {
+        "x": -13.75,
+        "y": 0,
+        "z": -1.38
+      },
+      "rotationY": 270
+    },
+    {
+      "order": 2,
+      "label": "2a",
+      "unityPosition": {
+        "x": -5.08,
+        "y": 0,
+        "z": -1.27
+      },
+      "rotationY": 270
+    },
+    {
+      "order": 3,
+      "label": "2b",
+      "unityPosition": {
+        "x": 3.26,
+        "y": 0,
+        "z": -1.38
+      },
+      "rotationY": 270
+    }
+  ],
+  "startSensor": {
+    "unityPosition": {
+      "x": -26.04,
+      "y": 0,
+      "z": -1.51
+    },
+    "rotationY": 270
+  },
+  "finishSensor": {
+    "unityPosition": {
+      "x": 15.11,
+      "y": 0,
+      "z": -1.28
+    },
+    "rotationY": 270
+  }
+}
