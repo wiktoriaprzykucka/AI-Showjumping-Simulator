@@ -5010,10 +5010,10 @@ PrefabInstance:
     - target: {fileID: 6068413484745542668, guid: 4ce899c745366ff4a8bb02bd3bb7200f, type: 3}
       propertyPath: m_Model
       value: 
-      objectReference: {fileID: 5022602860645237092, guid: e4fde325aef434e4a97cc3d5652dccc2, type: 3}
+      objectReference: {fileID: 0}
     - target: {fileID: 6068413484745542668, guid: 4ce899c745366ff4a8bb02bd3bb7200f, type: 3}
       propertyPath: m_BehaviorType
-      value: 2
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6068413484745542668, guid: 4ce899c745366ff4a8bb02bd3bb7200f, type: 3}
       propertyPath: m_UseChildSensors
