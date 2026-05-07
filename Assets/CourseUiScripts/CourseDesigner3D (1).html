@@ -77,7 +77,8 @@ canvas#c.orbiting { cursor: move; }
   color: var(--text);
   font-family: 'Bricolage Grotesque', sans-serif;
   font-size: 17px; font-weight: 500;
-  width: 100px;
+  min-width: 100px;
+  max-width: min(240px, 28vw);
   outline: none;
   border-bottom: 1px dashed transparent;
   transition: border-color 0.15s;
@@ -134,6 +135,18 @@ canvas#c.orbiting { cursor: move; }
 }
 .export-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(12, 242, 194, 0.5); }
 .export-btn:active { transform: translateY(0); }
+
+.export-btn.pdf-muted {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid rgba(10, 155, 126, 0.55);
+  box-shadow: none;
+}
+.export-btn.pdf-muted:hover {
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(12, 242, 194, 0.15);
+}
 
 /* ─── Action Dock (bottom) ─────────────────────────────── */
 .dock {
@@ -563,7 +576,7 @@ canvas#c.orbiting { cursor: move; }
   <!-- Top bar -->
   <div class="top-bar">
     <div class="brand"><div class="brand-dot"></div>Parkours</div>
-    <input class="course-name" id="course-name" value="ZO 12" maxlength="20">
+    <input class="course-name" id="course-name" value="ZO 12" maxlength="64">
     <div class="params">
       <label class="chip" title="Speed"><input class="chip-input" type="number" id="p-speed" value="350" oninput="touchSpeedInput()"><span class="chip-suf">m/min</span></label>
       <label class="chip" title="Obstacle height"><input class="chip-input" type="number" id="p-height" value="1.40" step="0.05" style="width:42px" oninput="refreshFei()"><span class="chip-suf">m</span></label>
@@ -574,7 +587,8 @@ canvas#c.orbiting { cursor: move; }
         <span class="chip-suf">m</span>
       </label>
     </div>
-    <button class="export-btn" onclick="doExport()">Export ↗</button>
+    <button class="export-btn pdf-muted" type="button" onclick="downloadPdfPlan()" title="Course plan PDF (top-down view)">PDF</button>
+    <button class="export-btn" onclick="doExport()">JSON ↗</button>
   </div>
 
   <!-- Status pill -->
@@ -708,7 +722,7 @@ canvas#c.orbiting { cursor: move; }
     <div class="modal-head">
       <div>
         <div class="modal-title">Course Export</div>
-        <div class="modal-sub">Save as <code style="background:rgba(0,0,0,0.06);padding:1px 6px;border-radius:4px;color:var(--accent)">course.json</code> in your Unity Assets folder</div>
+        <div class="modal-sub">JSON for Unity · PDF course plan (top-down) uses the same metrics as FEI summary</div>
       </div>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
@@ -716,12 +730,14 @@ canvas#c.orbiting { cursor: move; }
     <div class="modal-actions">
       <button class="mbtn primary" id="copy-btn" onclick="doCopy()">Copy to clipboard</button>
       <button class="mbtn secondary" onclick="downloadJson()">Download .json</button>
+      <button class="mbtn secondary" onclick="downloadPdfPlan()">Download PDF plan</button>
       <button class="mbtn secondary" onclick="closeModal()">Close</button>
     </div>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════════════
 // State
@@ -757,6 +773,10 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
+
+/** Off-screen renderer + ortho cam for PDF top-down capture */
+let droneOrthoCam = null;
+let droneRenderer = null;
 
 // Lights — bright daylight
 scene.add(new THREE.HemisphereLight(0xffffff, 0xb0c4a0, 0.7));
@@ -2235,6 +2255,274 @@ function downloadJson() {
   a.download = (data.courseInfo.name || 'course').replace(/\s+/g, '_') + '.json';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PDF plan (orthographic drone view + jsPDF)
+// ═══════════════════════════════════════════════════════════════════════
+
+function collectPdfHiddenObjects() {
+  const targets = [];
+  const hide = (o) => { if (o) targets.push(o); };
+  if (gGrid) hide(gGrid);
+  if (gBorder) hide(gBorder);
+  if (parallelHintsGroup) hide(parallelHintsGroup);
+  hObjs.forEach((g) => {
+    hide(g.getObjectByName('rotHandle'));
+    hide(g.getObjectByName('ring'));
+    hide(g.getObjectByName('innerRing'));
+  });
+  ['start', 'finish'].forEach((k) => {
+    const o = sensorObjs[k];
+    if (!o) return;
+    hide(o.getObjectByName('sensorRing'));
+    hide(o.getObjectByName('sensorRotHandle'));
+  });
+  return targets;
+}
+
+function runWithPdfSceneStyle(taskFn) {
+  const targets = collectPdfHiddenObjects();
+  const prevVis = targets.map((o) => o.visible);
+  targets.forEach((o) => { o.visible = false; });
+
+  const prevBg = scene.background.clone();
+  scene.background = new THREE.Color(0xffffff);
+
+  let prevGroundHex = null;
+  if (gMesh && gMesh.material && gMesh.material.color) {
+    prevGroundHex = gMesh.material.color.getHex();
+    gMesh.material.color.setHex(0xf7f7f5);
+  }
+
+  let prevPathColor = null;
+  let prevPathOpacity = null;
+  if (pathLine && pathLine.material) {
+    prevPathColor = pathLine.material.color.getHex();
+    prevPathOpacity = pathLine.material.opacity;
+    pathLine.material.color.setHex(0x5aa9e8);
+    pathLine.material.opacity = 0.92;
+  }
+
+  try {
+    return taskFn();
+  } finally {
+    targets.forEach((o, i) => { o.visible = prevVis[i]; });
+    scene.background.copy(prevBg);
+    if (prevGroundHex !== null && gMesh && gMesh.material && gMesh.material.color)
+      gMesh.material.color.setHex(prevGroundHex);
+    if (pathLine && pathLine.material && prevPathColor !== null) {
+      pathLine.material.color.setHex(prevPathColor);
+      pathLine.material.opacity = prevPathOpacity != null ? prevPathOpacity : pathLine.material.opacity;
+    }
+  }
+}
+
+function updateDroneOrthoCam() {
+  const pad = Math.max(arenaW, arenaH) * 0.07 + 2;
+  const halfW = arenaW / 2 + pad;
+  const halfH = arenaH / 2 + pad;
+  if (!droneOrthoCam) {
+    droneOrthoCam = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.5, 500);
+    droneOrthoCam.position.set(0, 120, 0);
+    droneOrthoCam.rotation.x = -Math.PI / 2;
+  } else {
+    droneOrthoCam.left = -halfW;
+    droneOrthoCam.right = halfW;
+    droneOrthoCam.top = halfH;
+    droneOrthoCam.bottom = -halfH;
+    droneOrthoCam.updateProjectionMatrix();
+  }
+  return droneOrthoCam;
+}
+
+function getDroneRenderer(w, h) {
+  if (!droneRenderer) {
+    droneRenderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      preserveDrawingBuffer: true,
+    });
+    droneRenderer.shadowMap.enabled = true;
+    droneRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    droneRenderer.outputEncoding = THREE.sRGBEncoding;
+  }
+  droneRenderer.setPixelRatio(1);
+  droneRenderer.setSize(w, h);
+  return droneRenderer;
+}
+
+function composeDronePlanImage(droneCam, srcCanvas) {
+  const w = srcCanvas.width;
+  const h = srcCanvas.height;
+  const out = document.createElement('canvas');
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(srcCanvas, 0, 0);
+
+  const padPx = Math.max(14, Math.round(Math.min(w, h) * 0.018));
+  ctx.strokeStyle = '#5c4033';
+  ctx.lineWidth = Math.max(2, Math.round(Math.min(w, h) * 0.004));
+  ctx.strokeRect(
+    padPx + ctx.lineWidth / 2,
+    padPx + ctx.lineWidth / 2,
+    w - padPx * 2 - ctx.lineWidth,
+    h - padPx * 2 - ctx.lineWidth,
+  );
+
+  const scaleMin = Math.min(w, h);
+
+  function drawCaption(text, wx, wz, dy = 0) {
+    const v = new THREE.Vector3(wx, 0, wz);
+    v.project(droneCam);
+    const sx = (v.x * 0.5 + 0.5) * w;
+    const sy = (-v.y * 0.5 + 0.5) * h;
+    const fs = Math.round(scaleMin * 0.026);
+    ctx.font = `bold ${fs}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = Math.max(3, Math.round(scaleMin * 0.004));
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeText(text, sx, sy + dy);
+    ctx.fillStyle = '#111111';
+    ctx.fillText(text, sx, sy + dy);
+  }
+
+  hurdles.forEach((h) => {
+    drawCaption(String(h.label), h.x, h.z, Math.round(-scaleMin * 0.02));
+  });
+
+  if (startSensor) drawCaption('Start', startSensor.x, startSensor.z, Math.round(scaleMin * 0.03));
+  if (finishSensor) drawCaption('Finish', finishSensor.x, finishSensor.z, Math.round(scaleMin * 0.03));
+
+  return out.toDataURL('image/jpeg', 0.92);
+}
+
+function captureDronePlanDataUrl() {
+  const imgW = 1500;
+  const imgH = Math.max(360, Math.round((imgW * arenaH) / arenaW));
+  const cam = updateDroneOrthoCam();
+  const dr = getDroneRenderer(imgW, imgH);
+  dr.render(scene, cam);
+  return composeDronePlanImage(cam, dr.domElement);
+}
+
+function formatPdfDate(d) {
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function formatPdfTime(d) {
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function downloadPdfPlan() {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('PDF library failed to load. Check your network connection and try again.');
+    return;
+  }
+
+  let dataUrl;
+  try {
+    dataUrl = runWithPdfSceneStyle(() => captureDronePlanDataUrl());
+  } catch (e) {
+    console.error(e);
+    alert('Could not render the course map for PDF.');
+    return;
+  }
+
+  const fe = computeFeiBundle3d();
+  const name = (document.getElementById('course-name').value || 'Course').trim();
+  const speed = fe.speed > 0 ? String(fe.speed) : '—';
+  const lengthStr = fe.lengthM > 0 ? fe.lengthM.toFixed(fe.lengthM >= 100 ? 0 : 1) : '—';
+  const taStr = fe.timeAllowedSec > 0 ? String(fe.timeAllowedSec) : '—';
+  const tlStr = fe.timeLimitSec > 0 ? String(fe.timeLimitSec) : '—';
+  const obsStr = fe.hasCourse ? String(fe.obstacleCount) : '0';
+  const effStr = fe.hasCourse ? String(fe.efforts) : '0';
+
+  const now = new Date();
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+    const margin = 14;
+
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pw, ph, 'F');
+
+    doc.setTextColor(20, 20, 20);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.text(name, margin, margin + 8);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(70, 70, 70);
+    doc.text('Show jumping course plan', margin, margin + 15);
+
+    const cx = pw / 2;
+    doc.setFontSize(11);
+    doc.text(formatPdfDate(now), cx, margin + 6, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(formatPdfTime(now), cx, margin + 11, { align: 'center' });
+    doc.setFontSize(9);
+    doc.text(`Arena ${arenaW} × ${arenaH} m`, cx, margin + 16.5, { align: 'center' });
+
+    doc.setFontSize(8.5);
+    doc.setTextColor(55, 55, 55);
+    const credit = '3D programming project by\nWiktoria Przykucka';
+    doc.text(credit, pw - margin, margin + 6, { align: 'right' });
+
+    const rowTop = margin + 26;
+    doc.setDrawColor(220, 215, 205);
+    doc.line(margin, rowTop - 2, pw - margin, rowTop - 2);
+
+    const col1 = margin;
+    const col2 = margin + 52;
+    let y = rowTop;
+
+    function pair(leftLabel, leftVal, rightLabel, rightVal) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text(leftLabel, col1, y);
+      doc.text(rightLabel, col2, y);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(25, 25, 25);
+      doc.text(String(leftVal), col1 + 34, y);
+      doc.text(String(rightVal), col2 + 38, y);
+      y += 5.2;
+    }
+
+    pair('Speed', `${speed} m/min`, 'Length', `${lengthStr} m`);
+    pair('Time allowed', `${taStr} s`, 'Time limit', `${tlStr} s`);
+    pair('Obstacles', obsStr, 'Efforts', effStr);
+
+    const mapTop = y + 8;
+    const mapBottom = ph - margin;
+    const mapH = mapBottom - mapTop;
+    const mapW = pw - margin * 2;
+    const imgProps = doc.getImageProperties(dataUrl);
+    const ratio = imgProps.width / imgProps.height;
+    let drawW = mapW;
+    let drawH = drawW / ratio;
+    if (drawH > mapH) {
+      drawH = mapH;
+      drawW = drawH * ratio;
+    }
+    const dx = margin + (mapW - drawW) / 2;
+    doc.addImage(dataUrl, 'JPEG', dx, mapTop, drawW, drawH);
+
+    const safeName = name.replace(/[^\w\-]+/g, '_').slice(0, 48) || 'course';
+    doc.save(`${safeName}_course_plan.pdf`);
+  } catch (e) {
+    console.error(e);
+    alert('Could not build the PDF file.');
+  }
 }
 
 document.getElementById('modal').addEventListener('click', e => {
