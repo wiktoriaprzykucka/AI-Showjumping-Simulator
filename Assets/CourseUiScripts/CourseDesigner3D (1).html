@@ -571,12 +571,18 @@ canvas#c.orbiting { cursor: move; }
 .modal-pre .k { color: var(--accent); }
 .modal-pre .s { color: #b46b00; }
 .modal-pre .n { color: #6c4caa; }
-.modal-actions { display: flex; gap: 8px; }
+.modal-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .mbtn { padding: 9px 16px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
 .mbtn.primary { background: var(--accent); color: #ffffff; border: none; font-weight: 700; }
 .mbtn.primary:hover { box-shadow: var(--accent-glow); }
 .mbtn.secondary { background: transparent; border-color: var(--border-bright); color: var(--text-dim); }
 .mbtn.secondary:hover { border-color: var(--text-dim); color: var(--text); }
+.unity-ws-port-label { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; margin: 0 4px; }
+.unity-ws-port-label input {
+  width: 52px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-bright);
+  background: var(--bg-elevated, #1a1f1c); color: var(--text); font-family: ui-monospace, monospace; font-size: 12px;
+}
+.unity-import-hint { flex-basis: 100%; font-size: 11px; min-height: 14px; margin: 2px 0 0; color: var(--text-dim); }
 </style>
 
 <div id="app">
@@ -739,8 +745,11 @@ canvas#c.orbiting { cursor: move; }
     <div class="modal-actions">
       <button class="mbtn primary" id="copy-btn" onclick="doCopy()">Copy to clipboard</button>
       <button class="mbtn secondary" onclick="downloadJson()">Download .json</button>
+      <label class="unity-ws-port-label" title="Must match Unity menu Tools → Course Import">WS port <input id="unity-ws-port" type="text" value="8765" size="4" inputmode="numeric" autocomplete="off" onchange="localStorage.setItem('unityImportPort', this.value.trim())"/></label>
+      <button class="mbtn primary" onclick="sendCourseToUnity()" title="Unity Editor: Tools → Course Import → Start WebSocket Server">Send to Unity</button>
       <button class="mbtn secondary" onclick="downloadPdfPlan()">Download PDF plan</button>
       <button class="mbtn secondary" onclick="closeModal()">Close</button>
+      <span id="unity-import-hint" class="unity-import-hint"></span>
     </div>
   </div>
 </div>
@@ -2266,6 +2275,89 @@ function downloadJson() {
   URL.revokeObjectURL(url);
 }
 
+const UNITY_WS_DEFAULT_PORT = '8765';
+
+function getUnityImportPort() {
+  const el = document.getElementById('unity-ws-port');
+  const raw = (el && el.value.trim()) || localStorage.getItem('unityImportPort') || UNITY_WS_DEFAULT_PORT;
+  localStorage.setItem('unityImportPort', raw);
+  return raw;
+}
+
+/** Push course JSON to Unity via local WebSocket (Fleck server in Editor). */
+function sendCourseToUnity() {
+  const data = buildExportData();
+  const rawName = (data.courseInfo && data.courseInfo.name) ? String(data.courseInfo.name) : 'course';
+  const baseName = rawName.replace(/\s+/g, '_').replace(/[^\w\-]+/g, '') || 'course';
+  const today = new Date().toISOString().slice(0, 10);
+  const relativePath = `Courses/Imports/${today}/${baseName}.json`;
+  const payload = JSON.stringify({
+    type: 'saveCourse',
+    relativePath,
+    jsonText: JSON.stringify(data),
+  });
+  const port = getUnityImportPort();
+  const hint = document.getElementById('unity-import-hint');
+  if (hint) {
+    hint.textContent = 'Connecting…';
+    hint.style.color = 'var(--text-dim)';
+  }
+  let finished = false;
+  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+  const timeoutMs = 10000;
+  const t = setTimeout(() => {
+    if (finished) return;
+    finished = true;
+    try { ws.close(); } catch (e) { /* noop */ }
+    if (hint) {
+      hint.textContent = `Timed out — Tools → Course Import → Start WebSocket Server (port ${port})`;
+      hint.style.color = '#f87171';
+    }
+  }, timeoutMs);
+
+  ws.onopen = () => { try { ws.send(payload); } catch (e) { /* noop */ } };
+
+  ws.onerror = () => { /* no details in browser */ };
+
+  ws.onmessage = (e) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(t);
+    let r;
+    try {
+      r = JSON.parse(e.data);
+    } catch (ex) {
+      if (hint) {
+        hint.textContent = 'Invalid JSON reply from Unity';
+        hint.style.color = '#f87171';
+      }
+      try { ws.close(); } catch (err) { /* noop */ }
+      return;
+    }
+    if (hint) {
+      if (r.ok) {
+        hint.textContent = `Saved · ${r.assetPath || ''}`;
+        hint.style.color = '#4ade80';
+      } else {
+        hint.textContent = r.error || 'Import rejected';
+        hint.style.color = '#f87171';
+      }
+    }
+    try { ws.close(); } catch (err) { /* noop */ }
+  };
+
+  ws.onclose = () => {
+    clearTimeout(t);
+    if (!finished) {
+      finished = true;
+      if (hint && hint.textContent === 'Connecting…') {
+        hint.textContent = `Could not connect to ws://127.0.0.1:${port} — start Unity import server (Tools → Course Import)`;
+        hint.style.color = '#f87171';
+      }
+    }
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // PDF plan (orthographic drone view + jsPDF)
 // ═══════════════════════════════════════════════════════════════════════
@@ -2582,4 +2674,10 @@ function intro() {
   requestAnimationFrame(intro);
 }
 setTimeout(intro, 500);
+
+(function initUnityImportPortField() {
+  const el = document.getElementById('unity-ws-port');
+  const s = localStorage.getItem('unityImportPort');
+  if (el && s) el.value = s;
+})();
 </script>
