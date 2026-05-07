@@ -44,11 +44,12 @@ canvas#c.orbiting { cursor: move; }
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 9px 9px 9px 18px;
-  display: flex; align-items: center; gap: 14px;
+  padding: 10px 12px 10px 18px;
+  display: flex; align-items: center; gap: 16px;
   z-index: 50;
   box-shadow: 0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
   animation: slideDown 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  max-width: calc(100vw - 28px);
 }
 
 @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } }
@@ -87,36 +88,44 @@ canvas#c.orbiting { cursor: move; }
 .course-name:focus { border-bottom-color: var(--accent); color: var(--accent); }
 
 .params {
-  display: flex; gap: 4px;
-  padding-left: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 16px;
+  margin-left: 2px;
   border-left: 1px solid var(--border);
 }
 .chip {
-  display: flex; align-items: baseline; gap: 4px;
-  padding: 6px 10px;
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 7px 12px;
   border-radius: 9px;
-  background: transparent;
-  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
   font-family: 'DM Sans', sans-serif;
   color: var(--text);
 }
-.chip:hover { background: rgba(255,255,255,0.04); border-color: var(--border); }
+.chip:hover { background: rgba(255,255,255,0.82); border-color: var(--border-bright); }
 .chip-input {
   background: transparent; border: none; outline: none;
   color: var(--text);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px; font-weight: 500;
-  width: 36px; padding: 0;
+  font-size: 14px; font-weight: 600;
+  min-width: 36px; padding: 0;
   text-align: right;
 }
 .chip-input:focus { color: var(--accent); }
+.chip-input.chip-speed { width: 52px; }
+.chip-input.chip-height { width: 54px; }
+.chip-input.chip-arena { width: 40px; }
 .chip-suf {
   font-family: 'DM Sans', sans-serif;
-  font-size: 10px; font-weight: 500;
-  color: var(--text-faint);
-  letter-spacing: 0.5px;
+  font-size: 11px; font-weight: 600;
+  color: rgba(35, 35, 35, 0.78);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .export-btn {
@@ -578,12 +587,12 @@ canvas#c.orbiting { cursor: move; }
     <div class="brand"><div class="brand-dot"></div>Parkours</div>
     <input class="course-name" id="course-name" value="ZO 12" maxlength="64">
     <div class="params">
-      <label class="chip" title="Speed"><input class="chip-input" type="number" id="p-speed" value="350" oninput="touchSpeedInput()"><span class="chip-suf">m/min</span></label>
-      <label class="chip" title="Obstacle height"><input class="chip-input" type="number" id="p-height" value="1.40" step="0.05" style="width:42px" oninput="refreshFei()"><span class="chip-suf">m</span></label>
+      <label class="chip" title="Speed"><input class="chip-input chip-speed" type="number" id="p-speed" value="350" oninput="touchSpeedInput()"><span class="chip-suf">m/min</span></label>
+      <label class="chip" title="Obstacle height"><input class="chip-input chip-height" type="number" id="p-height" value="1.40" step="0.05" oninput="refreshFei()"><span class="chip-suf">m</span></label>
       <label class="chip" title="Arena width × depth">
-        <input class="chip-input" type="number" id="aw" value="60" min="10" max="200" style="width:30px" onchange="rebuildGround()">
+        <input class="chip-input chip-arena" type="number" id="aw" value="60" min="10" max="200" onchange="rebuildGround()">
         <span class="chip-suf">×</span>
-        <input class="chip-input" type="number" id="ah" value="40" min="10" max="200" style="width:30px" onchange="rebuildGround()">
+        <input class="chip-input chip-arena" type="number" id="ah" value="40" min="10" max="200" onchange="rebuildGround()">
         <span class="chip-suf">m</span>
       </label>
     </div>
