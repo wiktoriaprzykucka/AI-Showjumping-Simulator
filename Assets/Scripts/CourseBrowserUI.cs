@@ -36,14 +36,17 @@ public class CourseBrowserUI : MonoBehaviour {
     [Tooltip("Visible when the scene starts.")]
     public bool startVisible = true;
 
-    [Tooltip("Width of the panel, in pixels.")]
-    public int panelWidth = 200;
+    [Tooltip("Width of the panel, in pixels (before uiScale is applied).")]
+    [Range(100, 600)] public int panelWidth = 260;
 
-    [Tooltip("Height of the panel, in pixels.")]
-    public int panelHeight = 240;
+    [Tooltip("Height of the panel, in pixels (before uiScale is applied).")]
+    [Range(100, 800)] public int panelHeight = 420;
 
-    [Tooltip("Margin from the screen edges, in pixels.")]
-    public int panelMargin = 8;
+    [Tooltip("Gap between the panel and the screen edge, in pixels.")]
+    [Range(0, 60)] public int panelMargin = 8;
+
+    [Tooltip("Uniform scale — shrinks the whole panel including text. 1 = full size, 0.5 = half. Tune this to control visual size.")]
+    [Range(0.35f, 1f)] public float uiScale = 0.55f;
 
     // ── runtime state ──────────────────────────────────────────────────────
     private readonly List<CourseEntry> _allCourses = new();
@@ -64,6 +67,7 @@ public class CourseBrowserUI : MonoBehaviour {
     private GUIStyle _rowSubStyle;
     private GUIStyle _hintStyle;
     private bool _stylesReady;
+    private float _builtAtScale = -1f;
 
     private class CourseEntry {
         public string fullPath;
@@ -188,34 +192,36 @@ public class CourseBrowserUI : MonoBehaviour {
 
     // ── IMGUI ──────────────────────────────────────────────────────────────
     private void EnsureStyles() {
-        if (_stylesReady) return;
+        if (_stylesReady && Mathf.Approximately(_builtAtScale, uiScale)) return;
+        _stylesReady = false;
+        _builtAtScale = uiScale;
 
         var bg = MakeColorTexture(new Color(0f, 0f, 0f, 0.85f));
-        _panelStyle = new GUIStyle { normal = { background = bg }, padding = new RectOffset(4, 4, 4, 4) };
+        _panelStyle = new GUIStyle { normal = { background = bg }, padding = new RectOffset(6, 6, 6, 6) };
 
         _titleStyle = new GUIStyle(GUI.skin.label) {
-            fontSize = 11, fontStyle = FontStyle.Bold,
+            fontSize = 14, fontStyle = FontStyle.Bold,
             normal = { textColor = Color.white }
         };
 
         _rowStyle = new GUIStyle(GUI.skin.button) {
             alignment = TextAnchor.MiddleLeft,
-            fontSize = 10, fontStyle = FontStyle.Bold,
-            padding = new RectOffset(4, 4, 1, 1),
+            fontSize = 13, fontStyle = FontStyle.Bold,
+            padding = new RectOffset(6, 6, 3, 3),
         };
         _rowStyle.normal.textColor = Color.white;
         _rowStyle.hover.textColor  = Color.yellow;
 
         _rowSubStyle = new GUIStyle(GUI.skin.label) {
-            fontSize = 8, fontStyle = FontStyle.Italic,
-            padding = new RectOffset(6, 4, 0, 1),
+            fontSize = 11, fontStyle = FontStyle.Italic,
+            padding = new RectOffset(8, 4, 0, 2),
             normal = { textColor = new Color(0.75f, 0.85f, 1f, 1f) },
         };
 
         _hintStyle = new GUIStyle(GUI.skin.label) {
-            fontSize = 10, fontStyle = FontStyle.Bold, richText = true,
+            fontSize = 12, fontStyle = FontStyle.Bold, richText = true,
             normal = { textColor = Color.white, background = MakeColorTexture(new Color(0f, 0f, 0f, 0.6f)) },
-            padding = new RectOffset(5, 5, 2, 2),
+            padding = new RectOffset(6, 6, 3, 3),
         };
 
         _stylesReady = true;
@@ -232,17 +238,25 @@ public class CourseBrowserUI : MonoBehaviour {
     void OnGUI() {
         EnsureStyles();
 
-        // Bottom-right anchor
-        int w = Mathf.Min(panelWidth, Screen.width  - panelMargin * 2);
-        int h = Mathf.Min(panelHeight, Screen.height - panelMargin * 2);
-        int x = Screen.width  - w - panelMargin;
-        int y = Screen.height - h - panelMargin;
+        // Bottom-right anchor — clamp so the panel can never end up off-screen,
+        // even if the user puts a huge value into panelMargin in the Inspector.
+        int margin = Mathf.Clamp(panelMargin, 0, 60);
+        int w = Mathf.Clamp(panelWidth,  100, Screen.width  - margin * 2);
+        int h = Mathf.Clamp(panelHeight, 100, Screen.height - margin * 2);
+        int x = Mathf.Max(0, Screen.width  - w - margin);
+        int y = Mathf.Max(0, Screen.height - h - margin);
+
+        float scale = Mathf.Clamp(uiScale, 0.35f, 1f);
+        Matrix4x4 oldMatrix = GUI.matrix;
+        Vector2 panelBottomRight = new Vector2(Screen.width - margin, Screen.height - margin);
+        GUIUtility.ScaleAroundPivot(new Vector2(scale, scale), panelBottomRight);
 
         if (!_visible) {
             var hintRect = new Rect(Screen.width - 230 - panelMargin, Screen.height - 24 - panelMargin, 230, 24);
             GUI.Label(hintRect,
                 $"Press <color=yellow>{toggleKey}</color> for course browser",
                 _hintStyle);
+            GUI.matrix = oldMatrix;
             return;
         }
 
@@ -255,26 +269,26 @@ public class CourseBrowserUI : MonoBehaviour {
         GUILayout.BeginHorizontal();
         GUILayout.Label("PARKOURS", _titleStyle);
         GUILayout.FlexibleSpace();
-        if (GUILayout.Button("↻", GUILayout.Width(18), GUILayout.Height(16))) ScanCourses();
-        if (GUILayout.Button("✕", GUILayout.Width(18), GUILayout.Height(16))) _visible = false;
+        if (GUILayout.Button("↻", GUILayout.Width(24), GUILayout.Height(22))) ScanCourses();
+        if (GUILayout.Button("✕", GUILayout.Width(24), GUILayout.Height(22))) _visible = false;
         GUILayout.EndHorizontal();
 
         // Search
         GUILayout.BeginHorizontal();
-        GUILayout.Label("🔍", GUILayout.Width(14));
-        string newSearch = GUILayout.TextField(_search ?? "", GUILayout.MinWidth(60));
+        GUILayout.Label("Search", GUILayout.Width(46));
+        string newSearch = GUILayout.TextField(_search ?? "", GUILayout.MinWidth(80), GUILayout.Height(20));
         if (newSearch != _search) { _search = newSearch; Refilter(); }
         GUILayout.EndHorizontal();
 
         // Folder cycle
         string folderLabel = _folderOptions[Mathf.Clamp(_folderIndex, 0, _folderOptions.Length - 1)];
-        if (GUILayout.Button("📁 " + folderLabel, GUILayout.Height(18))) {
+        if (GUILayout.Button("Folder: " + folderLabel, GUILayout.Height(22))) {
             _folderIndex = (_folderIndex + 1) % _folderOptions.Length;
             Refilter();
         }
 
         // Sort cycle
-        if (GUILayout.Button("⇵ " + _sortOptions[_sortIndex], GUILayout.Height(18))) {
+        if (GUILayout.Button("Sort: " + _sortOptions[_sortIndex], GUILayout.Height(22))) {
             _sortIndex = (_sortIndex + 1) % _sortOptions.Length;
             Refilter();
         }
@@ -288,7 +302,7 @@ public class CourseBrowserUI : MonoBehaviour {
         } else {
             for (int i = 0; i < _filtered.Count; i++) {
                 var entry = _filtered[i];
-                if (GUILayout.Button(entry.displayName, _rowStyle, GUILayout.Height(16))) {
+                if (GUILayout.Button(entry.displayName, _rowStyle, GUILayout.Height(24))) {
                     LoadCourse(entry);
                 }
                 GUILayout.Label($"{entry.folderLabel}  ·  {entry.modified:yyyy-MM-dd}", _rowSubStyle);
@@ -297,5 +311,6 @@ public class CourseBrowserUI : MonoBehaviour {
         GUILayout.EndScrollView();
 
         GUILayout.EndArea();
+        GUI.matrix = oldMatrix;
     }
 }
