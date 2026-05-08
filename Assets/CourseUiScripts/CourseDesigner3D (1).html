@@ -455,6 +455,103 @@ canvas#c.orbiting { cursor: move; }
 .stat-val { color: var(--accent); font-weight: 500; font-size: 14px; }
 .stat-key { color: var(--text-faint); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; font-family: 'DM Sans', sans-serif; }
 
+/* ─── Combination presets (course designer only) ─────── */
+.combo-panel {
+  position: fixed;
+  bottom: 100px;
+  left: 16px;
+  width: 248px;
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 12px 11px;
+  z-index: 42;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  animation: slideUp 0.45s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.combo-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.combo-panel-title {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.combo-cancel {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: all 0.12s;
+}
+.combo-cancel:hover { background: rgba(0,0,0,0.06); color: var(--text); }
+.combo-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.combo-row.combo-dist {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 0;
+}
+.combo-row-label {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 5px;
+}
+.combo-row button {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.45);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.12s;
+  line-height: 1.25;
+}
+.combo-row button .sub {
+  display: block;
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+.combo-row button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.combo-row button.cp-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.combo-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+.combo-hint strong { color: var(--accent); font-weight: 600; }
+
 /* ─── Camera Hint (bottom left) ────────────────────────── */
 .cam-hint {
   position: fixed; bottom: 24px; left: 16px;
@@ -688,6 +785,25 @@ canvas#c.orbiting { cursor: move; }
     <kbd>Right-drag</kbd> orbit &nbsp; <kbd>Shift-drag</kbd> pan &nbsp; <kbd>Scroll</kbd> zoom
   </div>
 
+  <div class="combo-panel" id="combo-panel">
+    <div class="combo-panel-head">
+      <span class="combo-panel-title">Combinations</span>
+      <button type="button" class="combo-cancel" id="cp-cancel" title="Cancel (Esc)" aria-label="Cancel combination placement" onclick="setPlaceMode('adjust')">✕</button>
+    </div>
+    <div class="combo-row combo-type">
+      <button type="button" id="cp-double" onclick="armComboPreset('double')">Double <span class="sub">a–b</span></button>
+      <button type="button" id="cp-triple" onclick="armComboPreset('triple')">Triple <span class="sub">a–b–c</span></button>
+    </div>
+    <div class="combo-row-label">Spacing (center to center)</div>
+    <div class="combo-row combo-dist">
+      <button type="button" id="cp-d-65" data-cpd="6.5" onclick="selectComboSpacing(6.5)">6.5&nbsp;m <span class="sub">tight</span></button>
+      <button type="button" id="cp-d-75" data-cpd="7.5" onclick="selectComboSpacing(7.5)">7.5&nbsp;m <span class="sub">1 stride</span></button>
+      <button type="button" id="cp-d-88" data-cpd="8.8" onclick="selectComboSpacing(8.8)">8.8&nbsp;m <span class="sub">2 strides</span></button>
+      <button type="button" id="cp-d-105" data-cpd="10.5" onclick="selectComboSpacing(10.5)">10.5&nbsp;m <span class="sub">3 strides</span></button>
+    </div>
+    <p class="combo-hint" id="combo-hint">Pick <strong>Double</strong> or <strong>Triple</strong>, choose spacing, then click the arena once.</p>
+  </div>
+
   <div id="labels"></div>
 
   <!-- FEI metrics + validation -->
@@ -761,14 +877,35 @@ canvas#c.orbiting { cursor: move; }
 // State
 // ═══════════════════════════════════════════════════════════════════════
 let hurdles = [];          // { id, label, x, z, rotY }
+/** Unique integer ids — never use timestamp + i*0.01 (large floats collapse to the same id and break combos). */
+let __hurdleIdSeq = 0;
+function bumpHurdleIdSeqFromHurdles() {
+  for (let hi = 0; hi < hurdles.length; hi++) {
+    const n = Number(hurdles[hi].id);
+    if (Number.isFinite(n) && n > __hurdleIdSeq) __hurdleIdSeq = Math.floor(n);
+  }
+}
+function newHurdleId() {
+  bumpHurdleIdSeqFromHurdles();
+  __hurdleIdSeq += 1;
+  return __hurdleIdSeq;
+}
 let startSensor = null;    // { x, z, rotY } | null — at most one
 let finishSensor = null;
 let selectedId = null;     // hurdle id
 let selectedSensor = null; // 'start' | 'finish' | null
 /** @type{'hurdle'|'start'|'finish'} */
-let placeMode = 'adjust';   // 'adjust' | 'hurdle' | 'start' | 'finish'
+let placeMode = 'adjust';   // 'adjust' | 'hurdle' | 'start' | 'finish' | 'comboPreset'
 let nextNum = 1;
 let comboMode = null;      // { num, suffix, triple?: boolean } | null
+/** Preset combo: armed when non-null while placeMode === 'comboPreset' */
+let comboPresetConfig = null; // { type: 'double'|'triple', spacingM: number } | null
+/** Last spacing (m) chosen in the Combinations panel; default 7.5 m */
+let comboPresetSpacing = 7.5;
+/** After placing a preset, undo removes all hurdles in this list in one step */
+let undoBatchIds = null;    // string[] | null (hurdle ids)
+/** 3D preview markers while placing a preset */
+let comboGhostGroup = null;
 let arenaW = 60, arenaH = 40;
 let hoveredId = null;
 
@@ -892,6 +1029,128 @@ const sensorObjs = { start: null, finish: null }; // THREE.Group
 let pathLine = null;
 let parallelHintsGroup = null;
 
+/** Robust lookup — ids sometimes mismatch strict === (e.g. string vs number from UI/JSON). */
+function findHurdleById(raw) {
+  if (raw === null || raw === undefined || raw === '') return null;
+  for (const hh of hurdles) {
+    if (hh.id === raw) return hh;
+    const a = Number(hh.id);
+    const b = Number(raw);
+    if (Number.isFinite(a) && Number.isFinite(b)) {
+      if (a === b) return hh;
+      const scale = Math.max(Math.abs(a), Math.abs(b), 1);
+      if (Math.abs(a - b) < 1e-9 * scale) return hh;
+    }
+  }
+  return null;
+}
+
+/** True when two hurdle ids refer to the same fence (Map keys vs selectedId, dataset strings, etc.). */
+function sameHurdleId(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  const na = Number(a);
+  const nb = Number(b);
+  if (Number.isFinite(na) && Number.isFinite(nb)) {
+    if (na === nb) return true;
+    const scale = Math.max(Math.abs(na), Math.abs(nb), 1);
+    if (Math.abs(na - nb) < 1e-9 * scale) return true;
+  }
+  return String(a) === String(b);
+}
+
+/** True if two or more hurdles share the same id (breaks combos: findHurdleById returns only the first). */
+function hasDuplicateHurdleIds() {
+  const seen = new Set();
+  for (let i = 0; i < hurdles.length; i++) {
+    const id = hurdles[i].id;
+    const key = Number.isFinite(Number(id)) ? Number(id) : String(id);
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+  return false;
+}
+
+/** Scrap everything and recreate hurdles with fresh unique ids + meshes (fixes IEEE id collisions). */
+function rebuildAllHurdleMeshesUniqueIds() {
+  const snap = hurdles.map((h) => ({
+    label: h.label,
+    x: h.x,
+    z: h.z,
+    rotY: h.rotY,
+    comboGroupId: h.comboGroupId,
+    comboIndex: h.comboIndex,
+    comboSpacingM: h.comboSpacingM,
+  }));
+  hObjs.forEach((o) => {
+    scene.remove(o);
+    o.traverse((c) => {
+      if (c.geometry && c.geometry.dispose) c.geometry.dispose();
+    });
+  });
+  hObjs.clear();
+  lblMap.forEach((d) => {
+    if (d.parentNode) d.parentNode.removeChild(d);
+  });
+  lblMap.clear();
+  hurdles = [];
+  __hurdleIdSeq = 0;
+  undoBatchIds = null;
+  for (let si = 0; si < snap.length; si++) {
+    const s = snap[si];
+    const h = {
+      id: newHurdleId(),
+      label: s.label,
+      x: s.x,
+      z: s.z,
+      rotY: s.rotY,
+      comboGroupId: s.comboGroupId,
+      comboIndex: s.comboIndex,
+      comboSpacingM: s.comboSpacingM,
+    };
+    hurdles.push(h);
+    makeHurdle(h);
+    mkLabel(h);
+  }
+  selectedId = null;
+  hoveredId = null;
+  updatePath();
+  refreshFei();
+  setSelectionVisuals();
+}
+
+/**
+ * If duplicate ids exist, rebuild scene meshes — return the hurdle matching this one's label + position.
+ */
+function repairHurdleIdsIfNeeded(h) {
+  if (!h || !hasDuplicateHurdleIds()) return h;
+  const tag = { label: h.label, x: h.x, z: h.z };
+  rebuildAllHurdleMeshesUniqueIds();
+  const found = hurdles.find(
+    (q) =>
+      q.label === tag.label &&
+      Math.abs(q.x - tag.x) < 0.02 &&
+      Math.abs(q.z - tag.z) < 0.02,
+  );
+  return found || null;
+}
+
+function getHurdleObj(raw) {
+  const hh = findHurdleById(raw);
+  if (!hh) return undefined;
+  if (hObjs.has(hh.id)) return hObjs.get(hh.id);
+  const want = Number(hh.id);
+  if (Number.isFinite(want)) {
+    for (const [k, v] of hObjs) {
+      if (Number(k) === want) return v;
+    }
+  }
+  for (const [k, v] of hObjs) {
+    if (sameHurdleId(k, hh.id)) return v;
+  }
+  return undefined;
+}
+
 /** Rails span hurdle group local ±X — parallelism ticks follow this axis. */
 const HURDLE_RAIL_HALF = (3.05 * 0.5);
 
@@ -920,6 +1179,190 @@ function railAxisFromRotY(rotYDeg) {
   const v = new THREE.Vector3(1, 0, 0);
   v.applyEuler(new THREE.Euler(0, THREE.MathUtils.degToRad(rotYDeg), 0));
   return v.normalize();
+}
+
+/** Jumping line direction (matches teal arrow / local −Z of hurdle group). */
+function jumpForwardDir(rotYDeg) {
+  const v = new THREE.Vector3(0, 0, -1);
+  v.applyEuler(new THREE.Euler(0, THREE.MathUtils.degToRad(rotYDeg), 0));
+  return v;
+}
+
+function rmComboGhost() {
+  if (!comboGhostGroup) return;
+  scene.remove(comboGhostGroup);
+  comboGhostGroup.traverse((obj) => {
+    const g = obj.geometry;
+    if (g && g.dispose) g.dispose();
+  });
+  comboGhostGroup = null;
+}
+
+function updateComboGhost(cx, cy) {
+  rmComboGhost();
+  if (placeMode !== 'comboPreset' || !comboPresetConfig) return;
+  const p = hitGround(cx, cy);
+  if (!p) return;
+  if (Math.abs(p.x) >= arenaW / 2 - 0.5 || Math.abs(p.z) >= arenaH / 2 - 0.5) return;
+  const { type, spacingM } = comboPresetConfig;
+  const count = type === 'triple' ? 3 : 2;
+  const rotY = 0;
+  const fwd = jumpForwardDir(rotY);
+  const xs = []; const zs = [];
+  for (let i = 0; i < count; i++) {
+    xs.push(p.x + fwd.x * spacingM * i);
+    zs.push(p.z + fwd.z * spacingM * i);
+  }
+  fitPositionsInArena(xs, zs);
+
+  const g = new THREE.Group();
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: ACCENT_HEX,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+  });
+  for (let i = 0; i < count; i++) {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.55, 36), ringMat.clone());
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(xs[i], 0.06, zs[i]);
+    g.add(ring);
+  }
+  const lineGeom = new THREE.BufferGeometry().setFromPoints(
+    xs.map((x, i) => new THREE.Vector3(x, 0.08, zs[i]))
+  );
+  g.add(new THREE.Line(lineGeom, new THREE.LineBasicMaterial({
+    color: ACCENT_HEX,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false,
+  })));
+  scene.add(g);
+  comboGhostGroup = g;
+}
+
+/** Shift (xs, zs) together so all points fit inside arena padding. */
+function fitPositionsInArena(xs, zs) {
+  const pad = 1.8;
+  const minXA = -arenaW / 2 + pad;
+  const maxXA = arenaW / 2 - pad;
+  const minZA = -arenaH / 2 + pad;
+  const maxZA = arenaH / 2 - pad;
+  for (let pass = 0; pass < 4; pass++) {
+    let minx = Math.min(...xs);
+    let maxx = Math.max(...xs);
+    let minz = Math.min(...zs);
+    let maxz = Math.max(...zs);
+    let dx = 0;
+    let dz = 0;
+    if (minx < minXA) dx = minXA - minx;
+    else if (maxx > maxXA) dx = maxXA - maxx;
+    if (minz < minZA) dz = minZA - minz;
+    else if (maxz > maxZA) dz = maxZA - maxz;
+    if (dx === 0 && dz === 0) break;
+    for (let i = 0; i < xs.length; i++) {
+      xs[i] += dx;
+      zs[i] += dz;
+    }
+  }
+}
+
+function hurdlesInComboGroup(comboGroupId) {
+  return hurdles.filter((x) => x.comboGroupId === comboGroupId).sort((a, b) => {
+    const ia = a.comboIndex;
+    const ib = b.comboIndex;
+    if (ia != null && ib != null) return ia - ib;
+    if (ia != null) return -1;
+    if (ib != null) return 1;
+    return sortFeiComboMembers([a, b])[0] === a ? -1 : 1;
+  });
+}
+
+const FEI_SUFFIX_RANK = { a: 0, b: 1, c: 2 };
+
+function sortFeiComboMembers(g) {
+  return g.slice().sort((a, b) => {
+    const pa = parseObstacleLabel3d(a.label);
+    const pb = parseObstacleLabel3d(b.label);
+    const ra = pa && pa.suffix ? (FEI_SUFFIX_RANK[pa.suffix] ?? 99) : 99;
+    const rb = pb && pb.suffix ? (FEI_SUFFIX_RANK[pb.suffix] ?? 99) : 99;
+    if (ra !== rb) return ra - rb;
+    const ia = a.comboIndex;
+    const ib = b.comboIndex;
+    if (ia != null && ib != null) return ia - ib;
+    if (ia != null) return -1;
+    if (ib != null) return 1;
+    return String(a.label).localeCompare(String(b.label), undefined, { numeric: true });
+  });
+}
+
+/**
+ * Same obstacle number: FEI a/b/c legs plus a plain numeric leg (e.g. "4" with "4a"/"4b"),
+ * so the full combination rotates when any leg is selected.
+ * Requires ≥2 legs and at least one letter leg so two unrelated "5" singles are not merged.
+ */
+function feiObstacleNumberComboLegs(h) {
+  const p0 = parseObstacleLabel3d(h.label);
+  if (!p0) return [];
+  const n = p0.num;
+  const legs = hurdles.filter((x) => {
+    const p = parseObstacleLabel3d(x.label);
+    if (!p || p.num !== n) return false;
+    if (!p.suffix) return true;
+    return FEI_SUFFIX_RANK[p.suffix] !== undefined;
+  });
+  const hasLetter = legs.some((x) => {
+    const p = parseObstacleLabel3d(x.label);
+    return p && !!p.suffix;
+  });
+  if (legs.length < 2 || !hasLetter) return [];
+  return legs;
+}
+
+/**
+ * One obstacle, multiple efforts: union of same-number combo legs (a/b/c ± plain same num) and same comboGroupId.
+ * Picking a, b, or c (or a plain same-number leg) yields the full double/triple.
+ */
+function resolveLabeledComboMembers(h) {
+  if (!h) return null;
+  h = repairHurdleIdsIfNeeded(h);
+  if (!h) return null;
+  const pool = [];
+  const add = (x) => {
+    if (!x) return;
+    if (pool.some((p) => sameHurdleId(p.id, x.id))) return;
+    pool.push(x);
+  };
+  feiObstacleNumberComboLegs(h).forEach(add);
+  const gid = h.comboGroupId;
+  if (gid != null && gid !== '') {
+    const gs = String(gid);
+    hurdles
+      .filter((x) => x.comboGroupId != null && x.comboGroupId !== '' && String(x.comboGroupId) === gs)
+      .forEach(add);
+  }
+  if (pool.length < 2) return null;
+  return sortFeiComboMembers(pool);
+}
+
+/** Singles spin in place. Combos match: same rotY on every leg, positions fixed — like one obstacle facing, multiple efforts on the line. */
+function applyHurdleYaw(h, newYawDeg) {
+  if (!h) return;
+  h = repairHurdleIdsIfNeeded(h);
+  if (!h) return;
+  const targetYaw = ((newYawDeg % 360) + 360) % 360;
+  const group = resolveLabeledComboMembers(h);
+  if (!group || group.length < 2) {
+    h.rotY = targetYaw;
+    syncTransform(h);
+    return;
+  }
+  const sorted = sortFeiComboMembers(group);
+  for (let i = 0; i < sorted.length; i++) {
+    sorted[i].rotY = targetYaw;
+    syncTransform(sorted[i]);
+  }
 }
 
 function rotationParallelismDeg(yawA_deg, yawB_deg) {
@@ -1063,9 +1506,9 @@ function makeHurdle(h) {
   head.rotation.x = -Math.PI / 2;
   handleGroup.add(head);
 
-  // Big invisible hit area for the handle
+  // Big invisible hit area for the handle (generous — thin arrow 3D mesh raycasts can be finicky)
   const hitArea = new THREE.Mesh(
-    new THREE.BoxGeometry(0.6, 0.5, 2.0),
+    new THREE.BoxGeometry(0.85, 0.55, 2.5),
     new THREE.MeshBasicMaterial({ visible: false })
   );
   hitArea.position.set(0, 0.25, -1.7);
@@ -1090,7 +1533,9 @@ function rmHurdle(id) {
 }
 
 function syncTransform(h) {
-  const o = hObjs.get(h.id); if (!o) return;
+  if (!h) return;
+  const o = getHurdleObj(h.id);
+  if (!o) return;
   o.position.set(h.x, 0, h.z);
   o.rotation.y = h.rotY * Math.PI / 180;
   updateParallelHints();
@@ -1181,12 +1626,20 @@ function setSelectionVisuals() {
       });
     }
   });
+  let comboSel = null;
+  if (!selectedSensor && selectedId != null && selectedId !== '') {
+    const hh0 = findHurdleById(selectedId);
+    const cg = hh0 ? resolveLabeledComboMembers(hh0) : null;
+    if (cg && cg.length >= 2) comboSel = cg;
+  }
   hObjs.forEach((o, id) => {
     const r = o.getObjectByName('ring');
     const ir = o.getObjectByName('innerRing');
     const handle = o.getObjectByName('rotHandle');
-    const isSel = id === selectedId;
-    const isHov = id === hoveredId && !isSel;
+    const isSel = comboSel
+      ? comboSel.some((m) => sameHurdleId(m.id, id))
+      : sameHurdleId(id, selectedId);
+    const isHov = hoveredId != null && sameHurdleId(id, hoveredId) && !isSel;
 
     if (r) r.material.opacity = isSel ? 0.9 : (isHov ? 0.3 : 0);
     if (ir) ir.material.opacity = isSel ? 0.06 : 0;
@@ -1246,14 +1699,24 @@ function rmLabel(id) {
 
 function updateLabels() {
   const w = wrap.clientWidth, h = wrap.clientHeight;
+  let labelCombo = null;
+  if (!selectedSensor && selectedId != null && selectedId !== '') {
+    const hhh = findHurdleById(selectedId);
+    const cc = hhh ? resolveLabeledComboMembers(hhh) : null;
+    if (cc && cc.length >= 2) labelCombo = cc;
+  }
   lblMap.forEach((d, id) => {
-    const o = hObjs.get(id); if (!o) return;
+    const o = getHurdleObj(id);
+    if (!o) return;
     const p = new THREE.Vector3(o.position.x, 2.4, o.position.z);
     p.project(camera);
     const sx = (p.x * 0.5 + 0.5) * w, sy = (-p.y * 0.5 + 0.5) * h;
     d.style.left = sx + 'px'; d.style.top = sy + 'px';
     d.style.display = (p.z < 1 && sx > -50 && sx < w + 50 && sy > -50 && sy < h + 50) ? 'flex' : 'none';
-    d.classList.toggle('sel', id === selectedId);
+    const isLblSel = labelCombo
+      ? labelCombo.some((m) => sameHurdleId(m.id, id))
+      : selectedId != null && sameHurdleId(id, selectedId);
+    d.classList.toggle('sel', isLblSel);
   });
 }
 
@@ -1291,16 +1754,27 @@ function hitScene(cx, cy) {
     }
   }
 
-  if (selectedId) {
-    const sel = hObjs.get(selectedId);
-    if (sel) {
+  if (selectedId != null && selectedId !== '') {
+    const hh0 = findHurdleById(selectedId);
+    const combo = hh0 ? resolveLabeledComboMembers(hh0) : null;
+    const tryIds = combo && combo.length >= 2 ? combo.map((x) => x.id) : [selectedId];
+    let bestDist = Infinity;
+    let bestHid = null;
+    for (let ti = 0; ti < tryIds.length; ti++) {
+      const tid = tryIds[ti];
+      const sel = getHurdleObj(tid);
+      if (!sel) continue;
       const handle = sel.getObjectByName('rotHandle');
-      if (handle) {
-        const meshes = []; handle.traverse(c => { if (c.isMesh) meshes.push(c); });
-        const hit = rc.intersectObjects(meshes, false);
-        if (hit.length) return { type: 'rotateHandle', hid: selectedId };
+      if (!handle) continue;
+      const meshes = []; handle.traverse(c => { if (c.isMesh) meshes.push(c); });
+      const rh = rc.intersectObjects(meshes, false);
+      if (rh.length && rh[0].distance < bestDist) {
+        bestDist = rh[0].distance;
+        const hh = findHurdleById(tid);
+        bestHid = hh ? hh.id : tid;
       }
     }
+    if (bestHid != null) return { type: 'rotateHandle', hid: bestHid };
   }
 
   let bestSens = null, bestSensDist = Infinity;
@@ -1335,7 +1809,10 @@ function hitScene(cx, cy) {
   if (hHit.length) {
     let cur = hHit[0].object;
     while (cur && !cur.userData.hid) cur = cur.parent;
-    if (cur && cur.userData.hid) return { type: 'hurdle', hid: cur.userData.hid };
+    if (cur && cur.userData.hid) {
+      const hh = findHurdleById(cur.userData.hid);
+      return { type: 'hurdle', hid: hh ? hh.id : cur.userData.hid };
+    }
   }
   if (bestSens !== null) return { type: 'sensor', kind: bestSens };
   return null;
@@ -1350,6 +1827,8 @@ const ms = {
   hid: null,
   sensorKind: null,
   rotStartAngle: 0, rotStartRot: 0,
+  /** Hurdle drag-rotate: world XZ pivot (centroid for combos, fence center for singles). */
+  rotPivotX: 0, rotPivotZ: 0,
   /** Set on left pointerdown when grabbing a hurdle/sensor so pointerup miss does not clear selection. */
   downPick: null,
   /** Adjust: empty-ground press with selection — becomes drag-move after threshold */
@@ -1357,6 +1836,8 @@ const ms = {
 };
 
 let hoveredSensor = null;
+/** Last pointer pos (canvas px) for combo ghost refresh after spacing change */
+let lastCanvasXY = [0, 0];
 
 function gcp(e) { const r = wrap.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 
@@ -1396,14 +1877,16 @@ canvas.addEventListener('pointerdown', e => {
       canvas.classList.add('rotating');
     }
   } else if (h && h.type === 'rotateHandle') {
-    // Start rotate
-    const obj = hObjs.get(h.hid);
+    const hd = findHurdleById(h.hid);
     const groundHit = hitGround(x, y);
-    if (groundHit) {
-      ms.mode = 'rotate'; ms.hid = h.hid;
-      ms.downPick = { type: 'hurdle', id: h.hid };
-      ms.rotStartAngle = Math.atan2(groundHit.x - obj.position.x, groundHit.z - obj.position.z);
-      ms.rotStartRot = hurdles.find(hh => hh.id === h.hid).rotY;
+    if (groundHit && hd) {
+      ms.rotPivotX = hd.x;
+      ms.rotPivotZ = hd.z;
+      ms.rotStartRot = hd.rotY;
+      ms.mode = 'rotate';
+      ms.hid = hd.id;
+      ms.downPick = { type: 'hurdle', id: hd.id };
+      ms.rotStartAngle = Math.atan2(groundHit.x - ms.rotPivotX, groundHit.z - ms.rotPivotZ);
       canvas.classList.add('rotating');
     }
   } else if (h && h.type === 'sensor') {
@@ -1412,10 +1895,10 @@ canvas.addEventListener('pointerdown', e => {
     ms.downPick = { type: 'sensor', kind: h.kind };
     canvas.classList.add('grabbing');
   } else if (h && h.type === 'hurdle') {
-    // Selecting / moving
-    setSel(h.hid);
-    ms.mode = 'move'; ms.hid = h.hid;
-    ms.downPick = { type: 'hurdle', id: h.hid };
+    const hid = findHurdleById(h.hid)?.id ?? h.hid;
+    setSel(hid);
+    ms.mode = 'move'; ms.hid = hid;
+    ms.downPick = { type: 'hurdle', id: hid };
     canvas.classList.add('grabbing');
   } else if (placeMode === 'adjust') {
     const gp = hitGround(x, y);
@@ -1440,8 +1923,10 @@ canvas.addEventListener('pointermove', e => {
 
   // Hover detect (only when not dragging)
   if (!ms.down) {
+    lastCanvasXY[0] = x;
+    lastCanvasXY[1] = y;
     const h = hitScene(x, y);
-    const newHov = h && h.type === 'hurdle' ? h.hid : null;
+    const newHov = h && h.type === 'hurdle' ? (findHurdleById(h.hid)?.id ?? h.hid) : null;
     const newSensHov = h && h.type === 'sensor' ? h.kind : null;
     let changed = newHov !== hoveredId || newSensHov !== hoveredSensor;
     hoveredId = newHov;
@@ -1457,6 +1942,7 @@ canvas.addEventListener('pointermove', e => {
       setSelectionVisuals();
       canvas.classList.toggle('grab', !!(hoveredId || hoveredSensor) && !selectedId && !selectedSensor);
     }
+    if (placeMode === 'comboPreset' && comboPresetConfig) updateComboGhost(x, y);
     return;
   }
 
@@ -1490,23 +1976,37 @@ canvas.addEventListener('pointermove', e => {
   } else if (ms.mode === 'move') {
     const p = hitGround(x, y);
     if (p) {
-      const h = hurdles.find(h => h.id === ms.hid);
+      const h = findHurdleById(ms.hid);
       if (h) {
-        h.x = Math.max(-arenaW/2 + 1.8, Math.min(arenaW/2 - 1.8, p.x));
-        h.z = Math.max(-arenaH/2 + 1.8, Math.min(arenaH/2 - 1.8, p.z));
-        syncTransform(h); updatePath(); updateInfoPanel(); refreshFei();
+        const nx = Math.max(-arenaW/2 + 1.8, Math.min(arenaW/2 - 1.8, p.x));
+        const nz = Math.max(-arenaH/2 + 1.8, Math.min(arenaH/2 - 1.8, p.z));
+        const dx = nx - h.x;
+        const dz = nz - h.z;
+        const grp = resolveLabeledComboMembers(h);
+        if (grp && grp.length >= 2) {
+          grp.forEach((o) => {
+            o.x = Math.max(-arenaW/2 + 1.8, Math.min(arenaW/2 - 1.8, o.x + dx));
+            o.z = Math.max(-arenaH/2 + 1.8, Math.min(arenaH/2 - 1.8, o.z + dz));
+            syncTransform(o);
+          });
+        } else {
+          h.x = nx;
+          h.z = nz;
+          syncTransform(h);
+        }
+        updatePath(); updateInfoPanel(); refreshFei();
       }
     }
   } else if (ms.mode === 'rotate') {
-    const obj = hObjs.get(ms.hid);
     const p = hitGround(x, y);
-    if (p && obj) {
-      const angle = Math.atan2(p.x - obj.position.x, p.z - obj.position.z);
+    const h = findHurdleById(ms.hid);
+    if (p && h) {
+      const angle = Math.atan2(p.x - ms.rotPivotX, p.z - ms.rotPivotZ);
       const delta = (angle - ms.rotStartAngle) * 180 / Math.PI;
-      const h = hurdles.find(h => h.id === ms.hid);
-      // Convert: handle is at -Z so rotation is opposite
-      h.rotY = ((ms.rotStartRot + delta) % 360 + 360) % 360;
-      syncTransform(h); updateInfoPanel();
+      applyHurdleYaw(h, ms.rotStartRot + delta);
+      updatePath();
+      updateInfoPanel();
+      refreshFei();
     }
   } else if (ms.mode === 'moveSensor') {
     const p = hitGround(x, y);
@@ -1547,13 +2047,14 @@ canvas.addEventListener('pointerup', e => {
       const [x, y] = gcp(e);
       const h = hitScene(x, y);
       const keepPick =
-        (ms.downPick?.type === 'hurdle' && Number(ms.downPick.id) === Number(selectedId)) ||
+        (ms.downPick?.type === 'hurdle' && sameHurdleId(ms.downPick.id, selectedId)) ||
         (ms.downPick?.type === 'sensor' && ms.downPick.kind === selectedSensor);
     if (!h) {
       const p = hitGround(x, y);
       if (p && Math.abs(p.x) < arenaW/2 - 1 && Math.abs(p.z) < arenaH/2 - 1) {
         if (placeMode === 'start') placeSensorAt('start', p.x, p.z);
         else if (placeMode === 'finish') placeSensorAt('finish', p.x, p.z);
+        else if (placeMode === 'comboPreset') placeComboPresetAt(p.x, p.z);
         else if (placeMode === 'hurdle') placeHurdle(p.x, p.z);
         else if (!keepPick) {
           setSel(null);
@@ -1573,7 +2074,7 @@ canvas.addEventListener('pointerup', e => {
       if (
         ms.downPick?.type === 'hurdle' &&
         selectedId != null &&
-        Number(ms.downPick.id) === Number(selectedId)
+        sameHurdleId(ms.downPick.id, selectedId)
       ) {
         setSel(selectedId);
       } else {
@@ -1584,6 +2085,10 @@ canvas.addEventListener('pointerup', e => {
   }
   ms.pendingGroundGrab = null;
   ms.down = false; ms.mode = null; ms.hid = null; ms.sensorKind = null; ms.downPick = null;
+});
+
+canvas.addEventListener('pointerleave', () => {
+  rmComboGhost();
 });
 
 canvas.addEventListener('pointercancel', () => {
@@ -1609,6 +2114,7 @@ window.addEventListener('keydown', e => {
   }
   else if (e.key === 'Escape') {
     ms.pendingGroundGrab = null;
+    if (placeMode === 'comboPreset') setPlaceMode('adjust');
     setSel(null);
     setSelSensor(null);
   }
@@ -1619,7 +2125,92 @@ window.addEventListener('keydown', e => {
 // ═══════════════════════════════════════════════════════════════════════
 // Hurdle management
 // ═══════════════════════════════════════════════════════════════════════
+function placeComboPresetAt(wx, wz) {
+  if (!comboPresetConfig) return;
+  const { type, spacingM } = comboPresetConfig;
+  const count = type === 'triple' ? 3 : 2;
+  const num = nextNum;
+  const rotY = 0;
+  const fwd = jumpForwardDir(rotY);
+  const xs = [];
+  const zs = [];
+  for (let i = 0; i < count; i++) {
+    xs.push(wx + fwd.x * spacingM * i);
+    zs.push(wz + fwd.z * spacingM * i);
+  }
+  fitPositionsInArena(xs, zs);
+
+  const gid = `${Date.now()}_cg`;
+  const suffixes = ['a', 'b', 'c'];
+  const placedIds = [];
+  for (let i = 0; i < count; i++) {
+    const h = {
+      id: newHurdleId(),
+      label: `${num}${suffixes[i]}`,
+      x: xs[i],
+      z: zs[i],
+      rotY,
+      comboGroupId: gid,
+      comboIndex: i,
+      comboSpacingM: spacingM,
+    };
+    hurdles.push(h);
+    makeHurdle(h);
+    mkLabel(h);
+    placedIds.push(h.id);
+  }
+  undoBatchIds = placedIds.slice();
+  nextNum++;
+  comboMode = null;
+  updateComboBtn();
+  rmComboGhost();
+  updatePath();
+  setSel(placedIds[placedIds.length - 1]);
+  refreshFei();
+  updateStatus();
+  hideOnboard();
+  setPlaceMode('adjust');
+}
+
+function armComboPreset(type) {
+  comboMode = null;
+  updateComboBtn();
+  comboPresetSpacing = comboPresetSpacing || 7.5;
+  comboPresetConfig = { type, spacingM: comboPresetSpacing };
+  setPlaceMode('comboPreset');
+  updateComboGhost(lastCanvasXY[0], lastCanvasXY[1]);
+}
+
+function selectComboSpacing(m) {
+  comboPresetSpacing = m;
+  if (comboPresetConfig) comboPresetConfig.spacingM = m;
+  updateComboPresetPanel();
+  if (placeMode === 'comboPreset' && comboPresetConfig) {
+    updateComboGhost(lastCanvasXY[0], lastCanvasXY[1]);
+  }
+}
+
+function updateComboPresetPanel() {
+  const dbl = document.getElementById('cp-double');
+  const tpl = document.getElementById('cp-triple');
+  if (dbl) dbl.classList.toggle('cp-on', !!(comboPresetConfig && comboPresetConfig.type === 'double'));
+  if (tpl) tpl.classList.toggle('cp-on', !!(comboPresetConfig && comboPresetConfig.type === 'triple'));
+  [6.5, 7.5, 8.8, 10.5].forEach((v) => {
+    const el = document.querySelector(`[data-cpd="${v}"]`);
+    if (el) el.classList.toggle('cp-on', Math.abs(comboPresetSpacing - v) < 0.05);
+  });
+  const hint = document.getElementById('combo-hint');
+  if (!hint) return;
+  if (placeMode === 'comboPreset' && comboPresetConfig) {
+    const last = comboPresetConfig.type === 'triple' ? 'c' : 'b';
+    hint.innerHTML = `Click the arena to place <strong>${nextNum}a–${nextNum}${last}</strong> (${comboPresetConfig.spacingM}&nbsp;m between centers). <span style="opacity:.85">Esc cancels.</span>`;
+  } else {
+    hint.innerHTML = 'Pick <strong>Double</strong> or <strong>Triple</strong>, choose spacing, then click the arena once.';
+  }
+}
+
 function placeHurdle(wx, wz) {
+  undoBatchIds = null;
   let label;
   if (comboMode) {
     label = comboMode.num + comboMode.suffix;
@@ -1637,7 +2228,7 @@ function placeHurdle(wx, wz) {
   } else {
     label = `${nextNum++}`;
   }
-  const h = { id: Date.now() + Math.random(), label, x: wx, z: wz, rotY: 0 };
+  const h = { id: newHurdleId(), label, x: wx, z: wz, rotY: 0 };
   hurdles.push(h);
   makeHurdle(h);
   mkLabel(h);
@@ -1650,6 +2241,7 @@ function placeHurdle(wx, wz) {
 }
 
 function placeSensorAt(kind, wx, wz) {
+  undoBatchIds = null;
   const nx = Math.max(-arenaW/2 + 1.8, Math.min(arenaW/2 - 1.8, wx));
   const nz = Math.max(-arenaH/2 + 1.8, Math.min(arenaH/2 - 1.8, wz));
   if (kind === 'start') {
@@ -1668,7 +2260,8 @@ function placeSensorAt(kind, wx, wz) {
 }
 
 function setSel(id) {
-  selectedId = id;
+  const hh = findHurdleById(id);
+  selectedId = hh ? hh.id : id;
   selectedSensor = null;
   setSelectionVisuals();
   updateInfoPanel();
@@ -1689,10 +2282,15 @@ function setPlaceMode(mode) {
     comboMode = null;
     updateComboBtn();
   }
+  if (mode !== 'comboPreset') {
+    comboPresetConfig = null;
+    rmComboGhost();
+  }
   document.getElementById('btn-place-adjust').classList.toggle('active', mode === 'adjust');
   document.getElementById('btn-place-hurdle').classList.toggle('active', mode === 'hurdle');
   document.getElementById('btn-place-start').classList.toggle('active', mode === 'start');
   document.getElementById('btn-place-finish').classList.toggle('active', mode === 'finish');
+  updateComboPresetPanel();
   updateInfoPanel();
   updateStatus();
 }
@@ -1706,10 +2304,12 @@ function stepRot(deg) {
     finishSensor.rotY = (finishSensor.rotY + deg + 360) % 360;
     syncSensor('finish'); updateInfoPanel(); return;
   }
-  const h = hurdles.find(h => h.id === selectedId);
+  const h = findHurdleById(selectedId);
   if (!h) return;
-  h.rotY = (h.rotY + deg + 360) % 360;
-  syncTransform(h); updateInfoPanel();
+  applyHurdleYaw(h, h.rotY + deg);
+  updatePath();
+  updateInfoPanel();
+  refreshFei();
 }
 
 function delSel() {
@@ -1722,19 +2322,48 @@ function delSel() {
     updatePath(); updateInfoPanel(); refreshFei(); updateStatus(); setSelectionVisuals(); return;
   }
   if (!selectedId) return;
-  hurdles = hurdles.filter(h => h.id !== selectedId);
-  rmHurdle(selectedId); rmLabel(selectedId);
+  const h = findHurdleById(selectedId);
+  const grp = resolveLabeledComboMembers(h);
+  const toRemove = grp && grp.length >= 2 ? grp : (h ? [h] : []);
+  const rmIds = new Set(toRemove.map(x => x.id));
+  toRemove.forEach(x => { rmHurdle(x.id); rmLabel(x.id); });
+  hurdles = hurdles.filter(x => !rmIds.has(x.id));
+  undoBatchIds = null;
   updatePath(); selectedId = null;
   updateInfoPanel(); refreshFei(); updateStatus(); setSelectionVisuals();
 }
 
 function undoLast() {
   if (!hurdles.length) return;
+  const nBatch = undoBatchIds && undoBatchIds.length;
+  if (nBatch) {
+    const tail = hurdles.slice(-nBatch);
+    const ok = tail.length === nBatch && tail.every((h, i) => h.id === undoBatchIds[i]);
+    if (ok) {
+      for (const h of tail) {
+        rmHurdle(h.id); rmLabel(h.id);
+      }
+      hurdles = hurdles.slice(0, -nBatch);
+      const lab = tail[0].label;
+      const p = parseObstacleLabel3d(lab);
+      if (p) nextNum = p.num;
+      undoBatchIds = null;
+      selectedId = null;
+      comboMode = null;
+      updateComboBtn();
+      updatePath();
+      updateInfoPanel(); refreshFei(); updateStatus(); setSelectionVisuals();
+      if (!hurdles.length) showOnboard();
+      return;
+    }
+  }
+  undoBatchIds = null;
   const last = hurdles.pop();
   rmHurdle(last.id); rmLabel(last.id);
   updatePath();
-  const n = parseInt(last.label);
-  if (!isNaN(n) && !last.label.match(/[a-c]$/)) { nextNum = n; comboMode = null; }
+  const pLab = parseObstacleLabel3d(last.label);
+  if (pLab && !pLab.suffix) nextNum = pLab.num;
+  comboMode = null;
   if (selectedId === last.id) selectedId = null;
   updateInfoPanel(); refreshFei(); updateStatus(); updateComboBtn(); setSelectionVisuals();
   if (hurdles.length === 0) showOnboard();
@@ -1746,12 +2375,16 @@ function clearAll() {
   ms.pendingGroundGrab = null;
   hurdles.forEach(h => { rmHurdle(h.id); rmLabel(h.id); });
   hurdles = [];
+  __hurdleIdSeq = 0;
   rmSensor('start'); rmSensor('finish');
+  rmComboGhost();
+  undoBatchIds = null;
   startSensor = null; finishSensor = null;
   selectedSensor = null;
   updatePath();
   selectedId = null; nextNum = 1; comboMode = null;
   updateInfoPanel(); refreshFei(); updateStatus(); updateComboBtn(); setSelectionVisuals();
+  updateComboPresetPanel();
   showOnboard();
 }
 
@@ -1826,6 +2459,10 @@ function updateStatus() {
   if (comboMode) {
     const kind = comboMode.triple ? 'triple' : 'double';
     s.innerHTML = `Combo (${kind}) · place <span class="accent">${comboMode.num}${comboMode.suffix}</span>`;
+  } else if (placeMode === 'comboPreset' && comboPresetConfig) {
+    const kind = comboPresetConfig.type === 'triple' ? 'Triple' : 'Double';
+    const last = comboPresetConfig.type === 'triple' ? 'c' : 'b';
+    s.innerHTML = `${kind} · <span class="accent">${nextNum}a–${nextNum}${last}</span> · ${comboPresetConfig.spacingM} m · click arena`;
   } else if (placeMode === 'start') {
     s.innerHTML = `Place <span class="accent">start</span> · click arena (one only)`;
   } else if (placeMode === 'finish') {
@@ -1873,7 +2510,8 @@ function ridingPathDistM() {
 }
 
 function parseObstacleLabel3d(label) {
-  const m = /^(\d+)([abc])?$/i.exec(String(label ?? '').trim());
+  const s = String(label ?? '').trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+  const m = /^(\d+)\s*([abc])?$/i.exec(s);
   if (!m) return null;
   return { num: parseInt(m[1], 10), suffix: (m[2] || '').toLowerCase() };
 }
@@ -2649,8 +3287,12 @@ function loop() {
   // Pulse selection ring + handle
   frame++;
   if (selectedId) {
-    const o = hObjs.get(selectedId);
-    if (o) {
+    const hh0 = findHurdleById(selectedId);
+    const cg = hh0 ? resolveLabeledComboMembers(hh0) : null;
+    const pulseList = cg && cg.length >= 2 ? cg : (hh0 ? [hh0] : []);
+    for (let pi = 0; pi < pulseList.length; pi++) {
+      const o = getHurdleObj(pulseList[pi].id);
+      if (!o) continue;
       const r = o.getObjectByName('ring');
       if (r) r.material.opacity = 0.7 + Math.sin(frame * 0.06) * 0.2;
     }
@@ -2662,6 +3304,7 @@ function loop() {
 loop();
 
 setPlaceMode('adjust');
+updateComboPresetPanel();
 updateInfoPanel();
 refreshFei();
 

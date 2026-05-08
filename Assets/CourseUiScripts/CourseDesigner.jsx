@@ -33,6 +33,16 @@ function groupHurdlesIntoObstacles(hurdles) {
   return groups;
 }
 
+function getComboGroupFor(hurdles, id) {
+  const target = hurdles.find(h => h.id === id);
+  if (!target) return [];
+  const groups = groupHurdlesIntoObstacles(hurdles);
+  for (const g of groups) {
+    if (g.some(h => h.id === id)) return g;
+  }
+  return [target];
+}
+
 function feiTotalsFromGroups(groups) {
   let singles = 0, doubles = 0, triples = 0, efforts = 0;
   let invalidCombo = false;
@@ -176,8 +186,11 @@ function HurdleSymbol({ hurdle, isSelected, onPointerDown }) {
   const col = isSelected ? "#b8860b" : "#1a1a1a";
   return (
     <g transform={`translate(${hurdle.x},${hurdle.y}) rotate(${hurdle.rotation})`}
-      onPointerDown={onPointerDown} style={{ cursor: "pointer", userSelect: "none" }}>
-      {isSelected && <circle r={30} fill="rgba(184,134,11,0.08)" stroke="#b8860b" strokeWidth={1.5} strokeDasharray="5,3" />}
+      onPointerDown={onPointerDown}
+      style={{ cursor: "pointer", userSelect: "none", pointerEvents: "all" }}>
+      {/* invisible but paintable hit area so the whole hurdle footprint is always grabbable */}
+      <circle r={32} fill="#000" fillOpacity={0.001} pointerEvents="all" />
+      {isSelected && <circle r={30} fill="rgba(184,134,11,0.08)" stroke="#b8860b" strokeWidth={1.5} strokeDasharray="5,3" pointerEvents="none" />}
       <line x1={0} y1={-26} x2={0} y2={-38} stroke={col} strokeWidth={1.5} markerEnd="url(#arr)" opacity={0.5} />
       <line x1={-16} y1={-6} x2={-16} y2={8} stroke={col} strokeWidth={3.5} strokeLinecap="round" />
       <line x1={16} y1={-6} x2={16} y2={8} stroke={col} strokeWidth={3.5} strokeLinecap="round" />
@@ -438,16 +451,29 @@ export default function CourseDesigner() {
     setSelectedId(id);
     if (tool === "add" || tool === "place-start" || tool === "place-finish") return;
 
+    const group = getComboGroupFor(hurdles, id);
+    const groupIds = new Set(group.map(h => h.id));
+
     if (tool === "select") {
       const start = getSVGPos(e);
-      const h = hurdles.find(h => h.id === id);
-      dragRef.current = { origX: h.x, origY: h.y, startX: start.x, startY: start.y };
+      const origs = new Map(group.map(h => [h.id, { x: h.x, y: h.y }]));
+      dragRef.current = { startX: start.x, startY: start.y };
       const onMove = (ev) => {
         const cur = getSVGPos(ev);
-        const nx = dragRef.current.origX + cur.x - dragRef.current.startX;
-        const ny = dragRef.current.origY + cur.y - dragRef.current.startY;
-        const c = clampArena(nx, ny);
-        setHurdles(prev => prev.map(h => h.id === id ? { ...h, x: c.x, y: c.y } : h));
+        let dx = cur.x - dragRef.current.startX;
+        let dy = cur.y - dragRef.current.startY;
+        // clamp delta so no group member leaves the arena
+        for (const h of group) {
+          const o = origs.get(h.id);
+          const c = clampArena(o.x + dx, o.y + dy);
+          dx = c.x - o.x;
+          dy = c.y - o.y;
+        }
+        setHurdles(prev => prev.map(h => {
+          if (!groupIds.has(h.id)) return h;
+          const o = origs.get(h.id);
+          return { ...h, x: o.x + dx, y: o.y + dy };
+        }));
       };
       const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
       window.addEventListener("pointermove", onMove);
@@ -455,17 +481,33 @@ export default function CourseDesigner() {
     }
 
     if (tool === "rotate") {
-      const h = hurdles.find(h => h.id === id);
+      const pivotX = group.reduce((s, h) => s + h.x, 0) / group.length;
+      const pivotY = group.reduce((s, h) => s + h.y, 0) / group.length;
       const sp = getSVGPos(e);
-      rotRef.current = {
-        startAngle: Math.atan2(sp.y - h.y, sp.x - h.x) * 180 / Math.PI,
-        origRot: h.rotation, cx: h.x, cy: h.y,
-      };
+      const startAngle = Math.atan2(sp.y - pivotY, sp.x - pivotX) * 180 / Math.PI;
+      const origs = new Map(group.map(h => [h.id, { x: h.x, y: h.y, rotation: h.rotation }]));
+      rotRef.current = { pivotX, pivotY, startAngle };
       const onMove = (ev) => {
         const cur = getSVGPos(ev);
-        const angle = Math.atan2(cur.y - rotRef.current.cy, cur.x - rotRef.current.cx) * 180 / Math.PI;
-        setHurdles(prev => prev.map(h => h.id === id
-          ? { ...h, rotation: (rotRef.current.origRot + angle - rotRef.current.startAngle + 360) % 360 } : h));
+        const angle = Math.atan2(cur.y - rotRef.current.pivotY, cur.x - rotRef.current.pivotX) * 180 / Math.PI;
+        const deltaDeg = angle - rotRef.current.startAngle;
+        const rad = deltaDeg * Math.PI / 180;
+        const cos = Math.cos(rad), sin = Math.sin(rad);
+        setHurdles(prev => prev.map(h => {
+          const o = origs.get(h.id);
+          if (!o) return h;
+          const rx = o.x - rotRef.current.pivotX;
+          const ry = o.y - rotRef.current.pivotY;
+          const nx = rx * cos - ry * sin + rotRef.current.pivotX;
+          const ny = rx * sin + ry * cos + rotRef.current.pivotY;
+          const c = clampArena(nx, ny);
+          return {
+            ...h,
+            x: c.x,
+            y: c.y,
+            rotation: (o.rotation + deltaDeg + 360) % 360,
+          };
+        }));
       };
       const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
       window.addEventListener("pointermove", onMove);
@@ -521,9 +563,31 @@ export default function CourseDesigner() {
   }, [tool, getSVGPos, startSensor, finishSensor, clampArena]);
 
   const stepRotate = (deg) => {
-    if (selectedId != null)
-      setHurdles(prev => prev.map(h => h.id === selectedId ? { ...h, rotation: (h.rotation + deg + 360) % 360 } : h));
-    else if (selectedSensor === "start" && startSensor)
+    if (selectedId != null) {
+      const group = getComboGroupFor(hurdles, selectedId);
+      if (group.length <= 1) {
+        setHurdles(prev => prev.map(h =>
+          h.id === selectedId ? { ...h, rotation: (h.rotation + deg + 360) % 360 } : h
+        ));
+        return;
+      }
+      const pivotX = group.reduce((s, h) => s + h.x, 0) / group.length;
+      const pivotY = group.reduce((s, h) => s + h.y, 0) / group.length;
+      const groupIds = new Set(group.map(h => h.id));
+      const rad = deg * Math.PI / 180;
+      const cos = Math.cos(rad), sin = Math.sin(rad);
+      setHurdles(prev => prev.map(h => {
+        if (!groupIds.has(h.id)) return h;
+        const rx = h.x - pivotX;
+        const ry = h.y - pivotY;
+        const nx = rx * cos - ry * sin + pivotX;
+        const ny = rx * sin + ry * cos + pivotY;
+        const c = clampArena(nx, ny);
+        return { ...h, x: c.x, y: c.y, rotation: (h.rotation + deg + 360) % 360 };
+      }));
+      return;
+    }
+    if (selectedSensor === "start" && startSensor)
       setStartSensor({ ...startSensor, rotation: (startSensor.rotation + deg + 360) % 360 });
     else if (selectedSensor === "finish" && finishSensor)
       setFinishSensor({ ...finishSensor, rotation: (finishSensor.rotation + deg + 360) % 360 });
