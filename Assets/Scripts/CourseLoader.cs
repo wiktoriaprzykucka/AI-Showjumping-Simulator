@@ -297,6 +297,19 @@ public class CourseLoader : MonoBehaviour {
     }
 
     // ─── Public API ──────────────────────────────────────────────────────
+    /// <summary>Load a course from a raw JSON string (e.g. read from disk at runtime
+    /// by CourseBrowserUI). Wraps the text in a transient TextAsset and reuses LoadCourse().</summary>
+    public void LoadCourseFromJson(string json, string displayName = null) {
+        if (string.IsNullOrEmpty(json)) {
+            Debug.LogError("[CourseLoader] LoadCourseFromJson called with empty text.");
+            return;
+        }
+        var ta = new TextAsset(json);
+        if (!string.IsNullOrEmpty(displayName)) ta.name = displayName;
+        courseJson = ta;
+        LoadCourse();
+    }
+
     [ContextMenu("Load Course")]
     public void LoadCourse() {
         ClearCourse();

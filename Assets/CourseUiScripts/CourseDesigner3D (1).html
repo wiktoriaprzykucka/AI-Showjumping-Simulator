@@ -1346,7 +1346,7 @@ function resolveLabeledComboMembers(h) {
   return sortFeiComboMembers(pool);
 }
 
-/** Singles spin in place. Combos match: same rotY on every leg, positions fixed — like one obstacle facing, multiple efforts on the line. */
+/** Singles spin in place. Combos rotate as ONE rigid obstacle: every leg gets the same rotY AND its (x,z) is rotated around the combo centroid by the delta yaw, so the line of efforts swings together. */
 function applyHurdleYaw(h, newYawDeg) {
   if (!h) return;
   h = repairHurdleIdsIfNeeded(h);
@@ -1359,9 +1359,29 @@ function applyHurdleYaw(h, newYawDeg) {
     return;
   }
   const sorted = sortFeiComboMembers(group);
-  for (let i = 0; i < sorted.length; i++) {
-    sorted[i].rotY = targetYaw;
-    syncTransform(sorted[i]);
+  // Use the picked leg's old yaw as the reference so dragging feels anchored to the hand,
+  // not to whichever leg sortFeiComboMembers happens to put first.
+  const oldYaw = h.rotY;
+  let deltaDeg = targetYaw - oldYaw;
+  // shortest-arc delta (avoids 359° spins from atan2 wraparound)
+  deltaDeg = ((deltaDeg + 540) % 360) - 180;
+  const rad = deltaDeg * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  // Pivot = centroid of all legs in world XZ.
+  let cx = 0, cz = 0;
+  for (const leg of sorted) { cx += leg.x; cz += leg.z; }
+  cx /= sorted.length; cz /= sorted.length;
+  const halfW = arenaW / 2 - 1.8;
+  const halfH = arenaH / 2 - 1.8;
+  for (const leg of sorted) {
+    const rx = leg.x - cx;
+    const rz = leg.z - cz;
+    const nx = rx * cos - rz * sin + cx;
+    const nz = rx * sin + rz * cos + cz;
+    leg.x = Math.max(-halfW, Math.min(halfW, nx));
+    leg.z = Math.max(-halfH, Math.min(halfH, nz));
+    leg.rotY = ((leg.rotY + deltaDeg) % 360 + 360) % 360;
+    syncTransform(leg);
   }
 }
 
@@ -1877,11 +1897,20 @@ canvas.addEventListener('pointerdown', e => {
       canvas.classList.add('rotating');
     }
   } else if (h && h.type === 'rotateHandle') {
-    const hd = findHurdleById(h.hid);
+    let hd = findHurdleById(h.hid);
+    hd = repairHurdleIdsIfNeeded(hd);
     const groundHit = hitGround(x, y);
     if (groundHit && hd) {
-      ms.rotPivotX = hd.x;
-      ms.rotPivotZ = hd.z;
+      // Snapshot every leg of the obstacle (combo or single) so we can rebuild absolute
+      // positions+yaws each frame from a STABLE origin. Otherwise per-frame mutation +
+      // re-resolving the group can drift or skip legs ("only first effort rotates").
+      const grp = resolveLabeledComboMembers(hd) || [hd];
+      let cx = 0, cz = 0;
+      for (const leg of grp) { cx += leg.x; cz += leg.z; }
+      cx /= grp.length; cz /= grp.length;
+      ms.rotPivotX = cx;
+      ms.rotPivotZ = cz;
+      ms.rotSnap = grp.map((leg) => ({ id: leg.id, x: leg.x, z: leg.z, rotY: leg.rotY }));
       ms.rotStartRot = hd.rotY;
       ms.mode = 'rotate';
       ms.hid = hd.id;
@@ -1895,7 +1924,11 @@ canvas.addEventListener('pointerdown', e => {
     ms.downPick = { type: 'sensor', kind: h.kind };
     canvas.classList.add('grabbing');
   } else if (h && h.type === 'hurdle') {
-    const hid = findHurdleById(h.hid)?.id ?? h.hid;
+    // Repair duplicate ids before stashing so subsequent move/rotate target the correct fence
+    // (otherwise findHurdleById can return a different hurdle and "some hurdles can't be moved").
+    let hd = findHurdleById(h.hid);
+    hd = repairHurdleIdsIfNeeded(hd);
+    const hid = hd?.id ?? h.hid;
     setSel(hid);
     ms.mode = 'move'; ms.hid = hid;
     ms.downPick = { type: 'hurdle', id: hid };
@@ -1999,11 +2032,27 @@ canvas.addEventListener('pointermove', e => {
     }
   } else if (ms.mode === 'rotate') {
     const p = hitGround(x, y);
-    const h = findHurdleById(ms.hid);
-    if (p && h) {
+    if (p && ms.rotSnap && ms.rotSnap.length) {
       const angle = Math.atan2(p.x - ms.rotPivotX, p.z - ms.rotPivotZ);
-      const delta = (angle - ms.rotStartAngle) * 180 / Math.PI;
-      applyHurdleYaw(h, ms.rotStartRot + delta);
+      let deltaDeg = (angle - ms.rotStartAngle) * 180 / Math.PI;
+      // Recompute every leg's absolute (x, z, rotY) from the snapshot taken at pointerdown.
+      // This is invariant to per-frame state, so every effort always rotates together.
+      const rad = deltaDeg * Math.PI / 180;
+      const cos = Math.cos(rad), sin = Math.sin(rad);
+      const halfW = arenaW / 2 - 1.8;
+      const halfH = arenaH / 2 - 1.8;
+      for (const snap of ms.rotSnap) {
+        const leg = findHurdleById(snap.id);
+        if (!leg) continue;
+        const rx = snap.x - ms.rotPivotX;
+        const rz = snap.z - ms.rotPivotZ;
+        const nx = rx * cos - rz * sin + ms.rotPivotX;
+        const nz = rx * sin + rz * cos + ms.rotPivotZ;
+        leg.x = Math.max(-halfW, Math.min(halfW, nx));
+        leg.z = Math.max(-halfH, Math.min(halfH, nz));
+        leg.rotY = ((snap.rotY + deltaDeg) % 360 + 360) % 360;
+        syncTransform(leg);
+      }
       updatePath();
       updateInfoPanel();
       refreshFei();

@@ -447,21 +447,26 @@ export default function CourseDesigner() {
 
   const onHurdlePointerDown = useCallback((e, id) => {
     e.stopPropagation();
+    e.preventDefault();
     setSelectedSensor(null);
     setSelectedId(id);
-    if (tool === "add" || tool === "place-start" || tool === "place-finish") return;
+    if (tool !== "select" && tool !== "rotate") return;
 
     const group = getComboGroupFor(hurdles, id);
     const groupIds = new Set(group.map(h => h.id));
+    const start = getSVGPos(e);
+
+    // AbortController guarantees listeners are torn down on pointerup OR pointercancel,
+    // even if the user releases outside the window — fixes "sometimes drag stops working".
+    const ac = new AbortController();
+    const signal = ac.signal;
 
     if (tool === "select") {
-      const start = getSVGPos(e);
       const origs = new Map(group.map(h => [h.id, { x: h.x, y: h.y }]));
-      dragRef.current = { startX: start.x, startY: start.y };
       const onMove = (ev) => {
         const cur = getSVGPos(ev);
-        let dx = cur.x - dragRef.current.startX;
-        let dy = cur.y - dragRef.current.startY;
+        let dx = cur.x - start.x;
+        let dy = cur.y - start.y;
         // clamp delta so no group member leaves the arena
         for (const h of group) {
           const o = origs.get(h.id);
@@ -475,31 +480,31 @@ export default function CourseDesigner() {
           return { ...h, x: o.x + dx, y: o.y + dy };
         }));
       };
-      const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointermove", onMove, { signal });
+      window.addEventListener("pointerup", () => ac.abort(), { signal });
+      window.addEventListener("pointercancel", () => ac.abort(), { signal });
+      return;
     }
 
     if (tool === "rotate") {
+      // pivot = centroid of the entire combination so all efforts swing as one rigid obstacle
       const pivotX = group.reduce((s, h) => s + h.x, 0) / group.length;
       const pivotY = group.reduce((s, h) => s + h.y, 0) / group.length;
-      const sp = getSVGPos(e);
-      const startAngle = Math.atan2(sp.y - pivotY, sp.x - pivotX) * 180 / Math.PI;
+      const startAngle = Math.atan2(start.y - pivotY, start.x - pivotX) * 180 / Math.PI;
       const origs = new Map(group.map(h => [h.id, { x: h.x, y: h.y, rotation: h.rotation }]));
-      rotRef.current = { pivotX, pivotY, startAngle };
       const onMove = (ev) => {
         const cur = getSVGPos(ev);
-        const angle = Math.atan2(cur.y - rotRef.current.pivotY, cur.x - rotRef.current.pivotX) * 180 / Math.PI;
-        const deltaDeg = angle - rotRef.current.startAngle;
+        const angle = Math.atan2(cur.y - pivotY, cur.x - pivotX) * 180 / Math.PI;
+        const deltaDeg = angle - startAngle;
         const rad = deltaDeg * Math.PI / 180;
         const cos = Math.cos(rad), sin = Math.sin(rad);
         setHurdles(prev => prev.map(h => {
           const o = origs.get(h.id);
           if (!o) return h;
-          const rx = o.x - rotRef.current.pivotX;
-          const ry = o.y - rotRef.current.pivotY;
-          const nx = rx * cos - ry * sin + rotRef.current.pivotX;
-          const ny = rx * sin + ry * cos + rotRef.current.pivotY;
+          const rx = o.x - pivotX;
+          const ry = o.y - pivotY;
+          const nx = rx * cos - ry * sin + pivotX;
+          const ny = rx * sin + ry * cos + pivotY;
           const c = clampArena(nx, ny);
           return {
             ...h,
@@ -509,56 +514,55 @@ export default function CourseDesigner() {
           };
         }));
       };
-      const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointermove", onMove, { signal });
+      window.addEventListener("pointerup", () => ac.abort(), { signal });
+      window.addEventListener("pointercancel", () => ac.abort(), { signal });
+      return;
     }
   }, [tool, getSVGPos, hurdles, clampArena]);
 
   const onSensorPointerDown = useCallback((e, sensorKind) => {
     e.stopPropagation();
+    e.preventDefault();
     setSelectedId(null);
     setSelectedSensor(sensorKind);
-    if (tool === "add" || tool === "place-start" || tool === "place-finish") return;
+    if (tool !== "select" && tool !== "rotate") return;
 
     const pt = sensorKind === "start" ? startSensor : finishSensor;
     if (!pt) return;
+    const setFn = sensorKind === "start" ? setStartSensor : setFinishSensor;
+    const start = getSVGPos(e);
+    const ac = new AbortController();
+    const signal = ac.signal;
 
     if (tool === "select") {
-      const start = getSVGPos(e);
-      dragRef.current = { origX: pt.x, origY: pt.y, startX: start.x, startY: start.y, sensorKind };
-      const setFn = sensorKind === "start" ? setStartSensor : setFinishSensor;
+      const orig = { x: pt.x, y: pt.y };
       const onMove = (ev) => {
         const cur = getSVGPos(ev);
-        const nx = dragRef.current.origX + cur.x - dragRef.current.startX;
-        const ny = dragRef.current.origY + cur.y - dragRef.current.startY;
-        const c = clampArena(nx, ny);
+        const c = clampArena(orig.x + cur.x - start.x, orig.y + cur.y - start.y);
         setFn(prev => ({ ...prev, x: c.x, y: c.y }));
       };
-      const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointermove", onMove, { signal });
+      window.addEventListener("pointerup", () => ac.abort(), { signal });
+      window.addEventListener("pointercancel", () => ac.abort(), { signal });
+      return;
     }
 
     if (tool === "rotate") {
-      const sp = getSVGPos(e);
-      rotRef.current = {
-        startAngle: Math.atan2(sp.y - pt.y, sp.x - pt.x) * 180 / Math.PI,
-        origRot: pt.rotation, cx: pt.x, cy: pt.y,
-        sensorKind,
-      };
-      const setFn = sensorKind === "start" ? setStartSensor : setFinishSensor;
+      const cx = pt.x, cy = pt.y, origRot = pt.rotation;
+      const startAngle = Math.atan2(start.y - cy, start.x - cx) * 180 / Math.PI;
       const onMove = (ev) => {
         const cur = getSVGPos(ev);
-        const angle = Math.atan2(cur.y - rotRef.current.cy, cur.x - rotRef.current.cx) * 180 / Math.PI;
+        const angle = Math.atan2(cur.y - cy, cur.x - cx) * 180 / Math.PI;
         setFn(prev => ({
           ...prev,
-          rotation: (rotRef.current.origRot + angle - rotRef.current.startAngle + 360) % 360,
+          rotation: (origRot + angle - startAngle + 360) % 360,
         }));
       };
-      const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointermove", onMove, { signal });
+      window.addEventListener("pointerup", () => ac.abort(), { signal });
+      window.addEventListener("pointercancel", () => ac.abort(), { signal });
+      return;
     }
   }, [tool, getSVGPos, startSensor, finishSensor, clampArena]);
 
