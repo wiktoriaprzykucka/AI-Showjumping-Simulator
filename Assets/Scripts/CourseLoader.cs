@@ -213,6 +213,9 @@ public class CourseLoader : MonoBehaviour {
     Transform loadedStartSensor;
     Transform loadedFinishSensor;
 
+    /// <summary>World transform for the current JSON <c>startSensor</c>, if any. Lets <see cref="HorseAgent"/> spawn at the gate when <see cref="coursePathManager"/> is not assigned.</summary>
+    public Transform LoadedStartSensor => loadedStartSensor;
+
     // Mastery-curriculum state (training only).
     private int curriculumIndex = 0;
     private TextAsset currentTrainingCourse;
@@ -370,6 +373,8 @@ public class CourseLoader : MonoBehaviour {
             horseAgent.finishGate = loadedFinishSensor;
             if (loadedFinishSensor != null)
                 Debug.Log("[CourseLoader] Finish gate assigned for HorseAgent (" + loadedFinishSensor.name + ").");
+            // Places the horse on the start sensor as soon as the parkour exists (covers F2 load after Play, and play while paused before the next episode).
+            horseAgent.RepositionAtCourseStart(applyJitter: false, overrideStart: loadedStartSensor);
         }
     }
 

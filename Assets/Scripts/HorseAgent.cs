@@ -357,31 +357,7 @@ public class HorseAgent : Agent
         }
         thisEpisodeReward = 0f;
 
-        Vector3 jitter = new Vector3(
-            Random.Range(-spawnPositionJitter, spawnPositionJitter),
-            0f,
-            Random.Range(-spawnPositionJitter, spawnPositionJitter));
-
-        CoursePathManager pathMgr = coursePathManager != null
-            ? coursePathManager
-            : (courseLoader != null ? courseLoader.coursePathManager : null);
-        Transform startPt = (spawnAtStartSensorWhenAvailable && pathMgr != null) ? pathMgr.startPoint : null;
-
-        if (startPt != null)
-        {
-            Vector3 localOffset = spawnLocalPosition + jitter;
-            Vector3 worldPos = startPt.position + startPt.rotation * localOffset;
-            float yaw = startPt.eulerAngles.y + Random.Range(-spawnYawJitterDeg, spawnYawJitterDeg);
-            transform.SetPositionAndRotation(worldPos, Quaternion.Euler(0f, yaw, 0f));
-        }
-        else
-        {
-            transform.localPosition = spawnLocalPosition + jitter;
-            transform.localRotation = Quaternion.Euler(
-                0f,
-                Random.Range(-spawnYawJitterDeg, spawnYawJitterDeg),
-                0f);
-        }
+        RepositionAtCourseStart(applyJitter: true);
 
         if (rb != null)
         {
@@ -399,6 +375,58 @@ public class HorseAgent : Agent
         finishConsumed = false;
         prevDistToHurdle = float.MaxValue;
         wasOutsideArena = false;
+    }
+
+    /// <summary>
+    /// Places the agent at the course start marker from JSON when available.
+    /// Called each episode with jitter (training); <see cref="CourseLoader"/> calls with <paramref name="applyJitter"/> false after loading so the horse appears on the sensor even if the course was chosen after Play.
+    /// </summary>
+    /// <param name="overrideStart">When non-null (e.g. from <see cref="CourseLoader"/> right after load), used even if <see cref="coursePathManager"/> / <see cref="courseLoader"/> are not wired on this agent.</param>
+    public void RepositionAtCourseStart(bool applyJitter, Transform overrideStart = null)
+    {
+        Transform startPt;
+        if (!spawnAtStartSensorWhenAvailable)
+            startPt = null;
+        else
+            startPt = overrideStart != null ? overrideStart : ResolveCourseStartPointTransform();
+
+        Vector3 jitter = applyJitter
+            ? new Vector3(
+                Random.Range(-spawnPositionJitter, spawnPositionJitter),
+                0f,
+                Random.Range(-spawnPositionJitter, spawnPositionJitter))
+            : Vector3.zero;
+        float yawExtra = applyJitter ? Random.Range(-spawnYawJitterDeg, spawnYawJitterDeg) : 0f;
+
+        if (startPt != null)
+        {
+            Vector3 localOffset = spawnLocalPosition + jitter;
+            Vector3 worldPos = startPt.position + startPt.rotation * localOffset;
+            float yaw = startPt.eulerAngles.y + yawExtra;
+            transform.SetPositionAndRotation(worldPos, Quaternion.Euler(0f, yaw, 0f));
+        }
+        else
+        {
+            transform.localPosition = spawnLocalPosition + jitter;
+            transform.localRotation = Quaternion.Euler(
+                0f,
+                applyJitter ? Random.Range(-spawnYawJitterDeg, spawnYawJitterDeg) : 0f,
+                0f);
+        }
+    }
+
+    Transform ResolveCourseStartPointTransform()
+    {
+        if (!spawnAtStartSensorWhenAvailable)
+            return null;
+
+        CoursePathManager pathMgr = coursePathManager != null
+            ? coursePathManager
+            : (courseLoader != null ? courseLoader.coursePathManager : null);
+        Transform startPt = pathMgr != null ? pathMgr.startPoint : null;
+        if (startPt == null && courseLoader != null)
+            startPt = courseLoader.LoadedStartSensor;
+        return startPt;
     }
 
     // ─────────────────────────────────────────────
