@@ -1371,7 +1371,7 @@ function resolveLabeledComboMembers(h) {
   return sortFeiComboMembers(pool);
 }
 
-/** Singles spin in place. Combos: rigid turn — orbit every leg around the group centroid. */
+/** Singles spin in place. Combos: one rigid unit — orbit every leg around the group centroid (fixed pivot); identical rotY on all legs. */
 function applyHurdleYaw(h, newYawDeg) {
   if (!h) return;
   h = repairHurdleIdsIfNeeded(h);
@@ -1385,24 +1385,26 @@ function applyHurdleYaw(h, newYawDeg) {
   }
   const sorted = sortFeiComboMembers(group);
 
-  // deltaDeg is the rotation to apply to every leg.  Derive it from the clicked leg's current
-  // rotY so all legs move by the same angular step rather than jumping to targetYaw directly.
   const oldYaw = h.rotY;
   let deltaDeg = targetYaw - oldYaw;
-  deltaDeg = ((deltaDeg + 540) % 360) - 180; // shortest-path wrap to (-180, 180]
+  deltaDeg = ((deltaDeg + 540) % 360) - 180;
 
   const rad = deltaDeg * Math.PI / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
-  let cx = 0, cz = 0;
-  for (const leg of sorted) { cx += leg.x; cz += leg.z; }
-  cx /= sorted.length;
-  cz /= sorted.length;
   const halfW = arenaW / 2 - 1.8;
   const halfH = arenaH / 2 - 1.8;
 
-  // Snapshot positions BEFORE mutating so each leg's orbit is computed from the original pose.
-  const snaps = sorted.map(leg => ({ x: leg.x, z: leg.z, rotY: leg.rotY }));
+  const snaps = sorted.map((leg) => ({ x: leg.x, z: leg.z }));
+  let cx = 0;
+  let cz = 0;
+  for (const s of snaps) {
+    cx += s.x;
+    cz += s.z;
+  }
+  cx /= snaps.length;
+  cz /= snaps.length;
+
   for (let i = 0; i < sorted.length; i++) {
     const leg = sorted[i];
     const snap = snaps[i];
@@ -1412,8 +1414,7 @@ function applyHurdleYaw(h, newYawDeg) {
     const nz = rx * sin + rz * cos + cz;
     leg.x = Math.max(-halfW, Math.min(halfW, nx));
     leg.z = Math.max(-halfH, Math.min(halfH, nz));
-    // Each leg's own rotY advances by the same delta (keeps them in sync even if they drifted).
-    leg.rotY = ((snap.rotY + deltaDeg) % 360 + 360) % 360;
+    leg.rotY = targetYaw;
     syncTransform(leg);
   }
 }
@@ -1895,7 +1896,7 @@ const ms = {
   rotSnap: null,
   /** Same length as rotSnap: hurdle objects from resolveLabeledComboMembers — avoids findHurdleById when ids collide (only first effort moved). */
   rotLegRefs: null,
-  /** Hurdle drag-rotate: world XZ pivot (centroid for combos, fence center for singles). */
+  /** Hurdle drag-rotate: world XZ pivot at combo/single centroid (fixed while dragging). */
   rotPivotX: 0, rotPivotZ: 0,
   /** Set on left pointerdown when grabbing a hurdle/sensor so pointerup miss does not clear selection. */
   downPick: null,
@@ -1945,6 +1946,7 @@ canvas.addEventListener('pointerdown', e => {
       ms.rotLastAngle = a0;
       ms.rotAccRad = 0;
       ms.rotStartRot = data.rotY;
+      ms.drag = true;
       canvas.classList.add('rotating');
     }
   } else if (h && h.type === 'rotateHandle') {
@@ -1956,14 +1958,20 @@ canvas.addEventListener('pointerdown', e => {
       // positions+yaws each frame from a STABLE origin. Otherwise per-frame mutation +
       // re-resolving the group can drift or skip legs ("only first effort rotates").
       const grp = resolveLabeledComboMembers(hd) || [hd];
-      let cx = 0, cz = 0;
-      for (const leg of grp) { cx += leg.x; cz += leg.z; }
-      cx /= grp.length; cz /= grp.length;
-      ms.rotPivotX = cx;
-      ms.rotPivotZ = cz;
+      let pcx = 0, pcz = 0;
+      for (const leg of grp) {
+        pcx += leg.x;
+        pcz += leg.z;
+      }
+      pcx /= grp.length;
+      pcz /= grp.length;
+      ms.rotPivotX = pcx;
+      ms.rotPivotZ = pcz;
       ms.rotSnap = grp.map((leg) => ({ x: leg.x, z: leg.z }));
       ms.rotLegRefs = grp.slice();
-      ms.rotStartRot = hd.rotY;
+      let ry0 = 0;
+      for (const leg of grp) ry0 += leg.rotY;
+      ms.rotStartRot = ry0 / grp.length;
       ms.mode = 'rotate';
       ms.hid = hd.id;
       ms.downPick = { type: 'hurdle', id: hd.id };
@@ -1971,6 +1979,7 @@ canvas.addEventListener('pointerdown', e => {
       ms.rotStartAngle = a0;
       ms.rotLastAngle = a0;
       ms.rotAccRad = 0;
+      ms.drag = true;
       canvas.classList.add('rotating');
     }
   } else if (h && h.type === 'sensor') {
@@ -2094,10 +2103,9 @@ canvas.addEventListener('pointermove', e => {
       while (d < -Math.PI) d += 2 * Math.PI;
       ms.rotAccRad += d;
       ms.rotLastAngle = angle;
-      const deltaDeg = ms.rotAccRad * 180 / Math.PI;
-      // Recompute every leg's absolute (x, z, rotY) from the snapshot taken at pointerdown.
-      // Index + rotLegRefs: duplicate hurdle ids would make findHurdleById hit the same leg every time.
-      const rad = deltaDeg * Math.PI / 180;
+      // Clockwise from above: negate integrated CCW atan2 delta vs Three.js +Y (CCW-positive rotY).
+      const deltaDeg = -(ms.rotAccRad * 180 / Math.PI);
+      const rad = (deltaDeg * Math.PI) / 180;
       const cos = Math.cos(rad), sin = Math.sin(rad);
       const halfW = arenaW / 2 - 1.8;
       const halfH = arenaH / 2 - 1.8;
@@ -2141,7 +2149,7 @@ canvas.addEventListener('pointermove', e => {
       while (d < -Math.PI) d += 2 * Math.PI;
       ms.rotAccRad += d;
       ms.rotLastAngle = angle;
-      const delta = ms.rotAccRad * 180 / Math.PI;
+      const delta = -(ms.rotAccRad * 180 / Math.PI);
       data.rotY = ((ms.rotStartRot + delta) % 360 + 360) % 360;
       syncSensor(ms.sensorKind); updateInfoPanel();
     }
@@ -2429,17 +2437,18 @@ function setPlaceMode(mode) {
 }
 
 function stepRot(deg) {
+  // deg > 0 ⇒ clockwise from above (see drag-rotate delta sign).
   if (selectedSensor === 'start' && startSensor) {
-    startSensor.rotY = (startSensor.rotY + deg + 360) % 360;
+    startSensor.rotY = (startSensor.rotY - deg + 360) % 360;
     syncSensor('start'); updateInfoPanel(); return;
   }
   if (selectedSensor === 'finish' && finishSensor) {
-    finishSensor.rotY = (finishSensor.rotY + deg + 360) % 360;
+    finishSensor.rotY = (finishSensor.rotY - deg + 360) % 360;
     syncSensor('finish'); updateInfoPanel(); return;
   }
   const h = findHurdleById(selectedId);
   if (!h) return;
-  applyHurdleYaw(h, h.rotY + deg);
+  applyHurdleYaw(h, h.rotY - deg);
   updatePath();
   updateInfoPanel();
   refreshFei();

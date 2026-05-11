@@ -558,12 +558,13 @@ export default function CourseDesigner() {
     }
 
     if (tool === "rotate") {
-      // pivot = centroid of the entire combination so all efforts swing as one rigid obstacle
       const pivotX = group.reduce((s, h) => s + h.x, 0) / group.length;
       const pivotY = group.reduce((s, h) => s + h.y, 0) / group.length;
+      const startRot =
+        group.reduce((s, g) => s + g.rotation, 0) / group.length;
       let lastAngleRad = Math.atan2(start.y - pivotY, start.x - pivotX);
       let accRad = 0;
-      const origs = group.map(h => ({ x: h.x, y: h.y, rotation: h.rotation }));
+      const origs = group.map((h) => ({ x: h.x, y: h.y }));
       const onMove = (ev) => {
         const cur = getSVGPos(ev);
         const angleRad = Math.atan2(cur.y - pivotY, cur.x - pivotX);
@@ -572,25 +573,23 @@ export default function CourseDesigner() {
         while (d < -Math.PI) d += 2 * Math.PI;
         accRad += d;
         lastAngleRad = angleRad;
-        const deltaDeg = accRad * 180 / Math.PI;
-        const rad = accRad;
+        const deltaDeg = -(accRad * 180 / Math.PI);
+        const rad = (deltaDeg * Math.PI) / 180;
         const cos = Math.cos(rad), sin = Math.sin(rad);
-        setHurdles(prev => prev.map(h => {
-          const gi = group.findIndex(g => g.id === h.id);
-          if (gi < 0) return h;
-          const o = origs[gi];
-          const rx = o.x - pivotX;
-          const ry = o.y - pivotY;
-          const nx = rx * cos - ry * sin + pivotX;
-          const ny = rx * sin + ry * cos + pivotY;
-          const c = clampArena(nx, ny);
-          return {
-            ...h,
-            x: c.x,
-            y: c.y,
-            rotation: (o.rotation + deltaDeg + 360) % 360,
-          };
-        }));
+        const nextRot = (startRot + deltaDeg + 360) % 360;
+        setHurdles((prev) =>
+          prev.map((h) => {
+            const gi = group.findIndex((g) => g.id === h.id);
+            if (gi < 0) return h;
+            const o = origs[gi];
+            const rx = o.x - pivotX;
+            const ry = o.y - pivotY;
+            const nx = rx * cos - ry * sin + pivotX;
+            const ny = rx * sin + ry * cos + pivotY;
+            const c = clampArena(nx, ny);
+            return { ...h, x: c.x, y: c.y, rotation: nextRot };
+          }),
+        );
       };
       window.addEventListener("pointermove", onMove, { signal });
       window.addEventListener("pointerup", () => ac.abort(), { signal });
@@ -638,8 +637,8 @@ export default function CourseDesigner() {
         while (d < -Math.PI) d += 2 * Math.PI;
         accRad += d;
         lastAngleRad = angleRad;
-        const deltaDeg = accRad * 180 / Math.PI;
-        setFn(prev => ({
+        const deltaDeg = -(accRad * 180 / Math.PI);
+        setFn((prev) => ({
           ...prev,
           rotation: (origRot + deltaDeg + 360) % 360,
         }));
@@ -652,34 +651,42 @@ export default function CourseDesigner() {
   }, [tool, getSVGPos, startSensor, finishSensor, clampArena]);
 
   const stepRotate = (deg) => {
+    // deg > 0 ⇒ clockwise when viewed from above (matches 3D designer).
     if (selectedId != null) {
       const group = getComboGroupFor(hurdles, selectedId);
       if (group.length <= 1) {
-        setHurdles(prev => prev.map(h =>
-          h.id === selectedId ? { ...h, rotation: (h.rotation + deg + 360) % 360 } : h
-        ));
+        setHurdles((prev) =>
+          prev.map((h) =>
+            h.id === selectedId ? { ...h, rotation: (h.rotation - deg + 360) % 360 } : h,
+          ),
+        );
         return;
       }
       const pivotX = group.reduce((s, h) => s + h.x, 0) / group.length;
       const pivotY = group.reduce((s, h) => s + h.y, 0) / group.length;
-      const groupIds = new Set(group.map(h => h.id));
-      const rad = deg * Math.PI / 180;
+      const groupIds = new Set(group.map((h) => h.id));
+      const rad = (-deg * Math.PI) / 180;
       const cos = Math.cos(rad), sin = Math.sin(rad);
-      setHurdles(prev => prev.map(h => {
-        if (!groupIds.has(h.id)) return h;
-        const rx = h.x - pivotX;
-        const ry = h.y - pivotY;
-        const nx = rx * cos - ry * sin + pivotX;
-        const ny = rx * sin + ry * cos + pivotY;
-        const c = clampArena(nx, ny);
-        return { ...h, x: c.x, y: c.y, rotation: (h.rotation + deg + 360) % 360 };
-      }));
+      const startRef =
+        group.reduce((s, g) => s + g.rotation, 0) / group.length;
+      const newRot = (startRef - deg + 360) % 360;
+      setHurdles((prev) =>
+        prev.map((h) => {
+          if (!groupIds.has(h.id)) return h;
+          const rx = h.x - pivotX;
+          const ry = h.y - pivotY;
+          const nx = rx * cos - ry * sin + pivotX;
+          const ny = rx * sin + ry * cos + pivotY;
+          const c = clampArena(nx, ny);
+          return { ...h, x: c.x, y: c.y, rotation: newRot };
+        }),
+      );
       return;
     }
     if (selectedSensor === "start" && startSensor)
-      setStartSensor({ ...startSensor, rotation: (startSensor.rotation + deg + 360) % 360 });
+      setStartSensor({ ...startSensor, rotation: (startSensor.rotation - deg + 360) % 360 });
     else if (selectedSensor === "finish" && finishSensor)
-      setFinishSensor({ ...finishSensor, rotation: (finishSensor.rotation + deg + 360) % 360 });
+      setFinishSensor({ ...finishSensor, rotation: (finishSensor.rotation - deg + 360) % 360 });
   };
 
   const deleteSelected = () => {
