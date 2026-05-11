@@ -62,16 +62,36 @@ function groupHurdlesIntoObstacles(hurdles) {
 function getComboGroupFor(hurdles, id) {
   const target = hurdles.find((h) => h.id === id);
   if (!target) return [];
+
+  // Union of both detection paths so a combo is found regardless of which leg is clicked
+  // or whether comboGroupId / consecutive-label ordering is present.
+  const seen = new Set();
+  const pool = [];
+  const add = (h) => { if (h && !seen.has(h.id)) { seen.add(h.id); pool.push(h); } };
+
+  // Path 1: shared comboGroupId (reliable for preset + manual C-key combos)
   const gid = target.comboGroupId;
   if (gid != null && gid !== "") {
     const gs = String(gid);
-    const pool = hurdles.filter((h) => h.comboGroupId != null && String(h.comboGroupId) === gs);
-    if (pool.length >= 2) return sortComboPoolByLegOrder(pool);
+    hurdles.filter((h) => h.comboGroupId != null && String(h.comboGroupId) === gs).forEach(add);
   }
-  const groups = groupHurdlesIntoObstacles(hurdles);
-  for (const g of groups) {
-    if (g.some((h) => h.id === id)) return g;
+
+  // Path 2: same base obstacle number with at least one a/b/c suffix (FEI combo label convention)
+  const tp = parseObstacleLabel(target.label);
+  if (tp) {
+    const base = tp.num;
+    const candidates = hurdles.filter((h) => {
+      const p = parseObstacleLabel(h.label);
+      return p && p.num === base;
+    });
+    const hasLetter = candidates.some((h) => {
+      const p = parseObstacleLabel(h.label);
+      return p && p.suffix !== "";
+    });
+    if (hasLetter && candidates.length >= 2) candidates.forEach(add);
   }
+
+  if (pool.length >= 2) return sortComboPoolByLegOrder(pool);
   return [target];
 }
 
@@ -722,6 +742,14 @@ export default function CourseDesigner() {
   const sel = hurdles.find(h => h.id === selectedId);
   const selSensorPt = selectedSensor === "start" ? startSensor : selectedSensor === "finish" ? finishSensor : null;
 
+  // All IDs that belong to the currently-selected combo (so every leg glows, not just the clicked one)
+  const selectedComboIds = useMemo(() => {
+    if (selectedId == null) return null;
+    const grp = getComboGroupFor(hurdles, selectedId);
+    if (grp.length <= 1) return null;
+    return new Set(grp.map(h => h.id));
+  }, [hurdles, selectedId]);
+
   const svgCursor = (tool === "add" || tool === "place-start" || tool === "place-finish") ? "crosshair" : "default";
 
   const TB = ({ id, icon, label }) => (
@@ -1006,7 +1034,8 @@ export default function CourseDesigner() {
 
             {/* Hurdles (before sensors so markers stay easy to hit) */}
             {hurdles.map(h=>(
-              <HurdleSymbol key={h.id} hurdle={h} isSelected={h.id===selectedId}
+              <HurdleSymbol key={h.id} hurdle={h}
+                isSelected={selectedComboIds ? selectedComboIds.has(h.id) : h.id===selectedId}
                 onPointerDown={(e)=>onHurdlePointerDown(e,h.id)} />
             ))}
 

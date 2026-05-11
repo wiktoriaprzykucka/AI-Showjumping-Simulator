@@ -1325,19 +1325,27 @@ function feiObstacleNumberComboLegs(h) {
 /**
  * One obstacle, multiple efforts: union of same-number combo legs (a/b/c ± plain same num) and same comboGroupId.
  * Picking a, b, or c (or a plain same-number leg) yields the full double/triple.
+ * Both detection paths are tried unconditionally and their results are unioned so a combo is found
+ * regardless of which leg is clicked or whether comboGroupId / label ordering alone would suffice.
  */
 function resolveLabeledComboMembers(h) {
   if (!h) return null;
   h = repairHurdleIdsIfNeeded(h);
   if (!h) return null;
+  const seen = new Set();
   const pool = [];
   const add = (x) => {
     if (!x) return;
-    // Reference only: two legs with a duplicate id must both stay in the pool or combos collapse to a "single".
-    if (pool.some((p) => p === x)) return;
+    // Use object identity; a duplicate id means two distinct leg refs must both be kept.
+    if (seen.has(x)) return;
+    seen.add(x);
     pool.push(x);
   };
+
+  // Path 1: FEI label-based (a/b/c suffix, same obstacle number)
   feiObstacleNumberComboLegs(h).forEach(add);
+
+  // Path 2: shared comboGroupId (reliable for both preset and C-key manual combos)
   const gid = h.comboGroupId;
   if (gid != null && gid !== '') {
     const gs = String(gid);
@@ -1345,11 +1353,25 @@ function resolveLabeledComboMembers(h) {
       .filter((x) => x.comboGroupId != null && x.comboGroupId !== '' && String(x.comboGroupId) === gs)
       .forEach(add);
   }
+
+  // Path 3: same base number WITH a suffix on at least the clicked leg — catches cases where
+  // hasLetter check in feiObstacleNumberComboLegs failed because one leg has no suffix yet.
+  if (pool.length < 2) {
+    const p0 = parseObstacleLabel3d(h.label);
+    if (p0 && p0.suffix) {
+      const n = p0.num;
+      hurdles.filter((x) => {
+        const p = parseObstacleLabel3d(x.label);
+        return p && p.num === n;
+      }).forEach(add);
+    }
+  }
+
   if (pool.length < 2) return null;
   return sortFeiComboMembers(pool);
 }
 
-/** Singles spin in place. Combos: rigid turn — orbit every leg around the group centroid, then one shared rotY (picked hurdle's target heading). */
+/** Singles spin in place. Combos: rigid turn — orbit every leg around the group centroid. */
 function applyHurdleYaw(h, newYawDeg) {
   if (!h) return;
   h = repairHurdleIdsIfNeeded(h);
@@ -1362,30 +1384,36 @@ function applyHurdleYaw(h, newYawDeg) {
     return;
   }
   const sorted = sortFeiComboMembers(group);
+
+  // deltaDeg is the rotation to apply to every leg.  Derive it from the clicked leg's current
+  // rotY so all legs move by the same angular step rather than jumping to targetYaw directly.
   const oldYaw = h.rotY;
   let deltaDeg = targetYaw - oldYaw;
-  deltaDeg = ((deltaDeg + 540) % 360) - 180;
+  deltaDeg = ((deltaDeg + 540) % 360) - 180; // shortest-path wrap to (-180, 180]
+
   const rad = deltaDeg * Math.PI / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
-  let cx = 0;
-  let cz = 0;
-  for (const leg of sorted) {
-    cx += leg.x;
-    cz += leg.z;
-  }
+  let cx = 0, cz = 0;
+  for (const leg of sorted) { cx += leg.x; cz += leg.z; }
   cx /= sorted.length;
   cz /= sorted.length;
   const halfW = arenaW / 2 - 1.8;
   const halfH = arenaH / 2 - 1.8;
-  for (const leg of sorted) {
-    const rx = leg.x - cx;
-    const rz = leg.z - cz;
+
+  // Snapshot positions BEFORE mutating so each leg's orbit is computed from the original pose.
+  const snaps = sorted.map(leg => ({ x: leg.x, z: leg.z, rotY: leg.rotY }));
+  for (let i = 0; i < sorted.length; i++) {
+    const leg = sorted[i];
+    const snap = snaps[i];
+    const rx = snap.x - cx;
+    const rz = snap.z - cz;
     const nx = rx * cos - rz * sin + cx;
     const nz = rx * sin + rz * cos + cz;
     leg.x = Math.max(-halfW, Math.min(halfW, nx));
     leg.z = Math.max(-halfH, Math.min(halfH, nz));
-    leg.rotY = targetYaw;
+    // Each leg's own rotY advances by the same delta (keeps them in sync even if they drifted).
+    leg.rotY = ((snap.rotY + deltaDeg) % 360 + 360) % 360;
     syncTransform(leg);
   }
 }
