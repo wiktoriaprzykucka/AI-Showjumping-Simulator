@@ -1,0 +1,38 @@
+# Ignore everything
+*
+!.gitignore
+
+# Keep these top-level folders
+!Assets/
+!Packages/
+!ProjectSettings/
+!UserSettings/
+
+# Allow everything inside those folders recursively
+!Assets/**
+!Packages/**
+!ProjectSettings/**
+!UserSettings/**
+
+# But still exclude generated/junk inside Assets
+# Third-party pack (large terrains/audio); keep local only — do not push to GitHub
+Assets/BOKI/**
+Assets/BOKI.meta
+Assets/AssetStoreTools/
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# IDE folders (optional, personal preference)
+.idea/
+.vscode/
+.cursor/
+*.suo
+*.user

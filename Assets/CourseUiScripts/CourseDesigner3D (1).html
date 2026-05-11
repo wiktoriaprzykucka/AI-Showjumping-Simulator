@@ -898,6 +898,8 @@ let selectedSensor = null; // 'start' | 'finish' | null
 let placeMode = 'adjust';   // 'adjust' | 'hurdle' | 'start' | 'finish' | 'comboPreset'
 let nextNum = 1;
 let comboMode = null;      // { num, suffix, triple?: boolean } | null
+/** C-key combo: shared id on all legs so resolveLabeledComboMembers always gets ≥2 (label-only FEI can miss). */
+let activeManualComboGroupId = null;
 /** Preset combo: armed when non-null while placeMode === 'comboPreset' */
 let comboPresetConfig = null; // { type: 'double'|'triple', spacingM: number } | null
 /** Last spacing (m) chosen in the Combinations panel; default 7.5 m */
@@ -1331,7 +1333,8 @@ function resolveLabeledComboMembers(h) {
   const pool = [];
   const add = (x) => {
     if (!x) return;
-    if (pool.some((p) => sameHurdleId(p.id, x.id))) return;
+    // Reference only: two legs with a duplicate id must both stay in the pool or combos collapse to a "single".
+    if (pool.some((p) => p === x)) return;
     pool.push(x);
   };
   feiObstacleNumberComboLegs(h).forEach(add);
@@ -1346,7 +1349,7 @@ function resolveLabeledComboMembers(h) {
   return sortFeiComboMembers(pool);
 }
 
-/** Singles spin in place. Combos rotate as ONE rigid obstacle: every leg gets the same rotY AND its (x,z) is rotated around the combo centroid by the delta yaw, so the line of efforts swings together. */
+/** Singles spin in place. Combos: rigid turn — orbit every leg around the group centroid, then one shared rotY (picked hurdle's target heading). */
 function applyHurdleYaw(h, newYawDeg) {
   if (!h) return;
   h = repairHurdleIdsIfNeeded(h);
@@ -1359,18 +1362,20 @@ function applyHurdleYaw(h, newYawDeg) {
     return;
   }
   const sorted = sortFeiComboMembers(group);
-  // Use the picked leg's old yaw as the reference so dragging feels anchored to the hand,
-  // not to whichever leg sortFeiComboMembers happens to put first.
   const oldYaw = h.rotY;
   let deltaDeg = targetYaw - oldYaw;
-  // shortest-arc delta (avoids 359° spins from atan2 wraparound)
   deltaDeg = ((deltaDeg + 540) % 360) - 180;
   const rad = deltaDeg * Math.PI / 180;
-  const cos = Math.cos(rad), sin = Math.sin(rad);
-  // Pivot = centroid of all legs in world XZ.
-  let cx = 0, cz = 0;
-  for (const leg of sorted) { cx += leg.x; cz += leg.z; }
-  cx /= sorted.length; cz /= sorted.length;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  let cx = 0;
+  let cz = 0;
+  for (const leg of sorted) {
+    cx += leg.x;
+    cz += leg.z;
+  }
+  cx /= sorted.length;
+  cz /= sorted.length;
   const halfW = arenaW / 2 - 1.8;
   const halfH = arenaH / 2 - 1.8;
   for (const leg of sorted) {
@@ -1380,7 +1385,7 @@ function applyHurdleYaw(h, newYawDeg) {
     const nz = rx * sin + rz * cos + cz;
     leg.x = Math.max(-halfW, Math.min(halfW, nx));
     leg.z = Math.max(-halfH, Math.min(halfH, nz));
-    leg.rotY = ((leg.rotY + deltaDeg) % 360 + 360) % 360;
+    leg.rotY = targetYaw;
     syncTransform(leg);
   }
 }
@@ -1554,7 +1559,15 @@ function rmHurdle(id) {
 
 function syncTransform(h) {
   if (!h) return;
-  const o = getHurdleObj(h.id);
+  let o = getHurdleObj(h.id);
+  if (!o) {
+    for (const [k, v] of hObjs) {
+      if (sameHurdleId(k, h.id)) {
+        o = v;
+        break;
+      }
+    }
+  }
   if (!o) return;
   o.position.set(h.x, 0, h.z);
   o.rotation.y = h.rotY * Math.PI / 180;
@@ -1847,6 +1860,13 @@ const ms = {
   hid: null,
   sensorKind: null,
   rotStartAngle: 0, rotStartRot: 0,
+  /** Unwrapped drag rotation (radians): incremental atan2 deltas so ±π branch cuts do not flip combos. */
+  rotAccRad: 0,
+  rotLastAngle: 0,
+  /** During hurdle drag-rotate: frozen copy of each leg { x, z } at pointerdown; yaw from rotStartRot only. */
+  rotSnap: null,
+  /** Same length as rotSnap: hurdle objects from resolveLabeledComboMembers — avoids findHurdleById when ids collide (only first effort moved). */
+  rotLegRefs: null,
   /** Hurdle drag-rotate: world XZ pivot (centroid for combos, fence center for singles). */
   rotPivotX: 0, rotPivotZ: 0,
   /** Set on left pointerdown when grabbing a hurdle/sensor so pointerup miss does not clear selection. */
@@ -1892,7 +1912,10 @@ canvas.addEventListener('pointerdown', e => {
       ms.mode = 'rotateSensor';
       ms.sensorKind = h.kind;
       ms.downPick = { type: 'sensor', kind: h.kind };
-      ms.rotStartAngle = Math.atan2(groundHit.x - obj.position.x, groundHit.z - obj.position.z);
+      const a0 = Math.atan2(groundHit.x - obj.position.x, groundHit.z - obj.position.z);
+      ms.rotStartAngle = a0;
+      ms.rotLastAngle = a0;
+      ms.rotAccRad = 0;
       ms.rotStartRot = data.rotY;
       canvas.classList.add('rotating');
     }
@@ -1910,12 +1933,16 @@ canvas.addEventListener('pointerdown', e => {
       cx /= grp.length; cz /= grp.length;
       ms.rotPivotX = cx;
       ms.rotPivotZ = cz;
-      ms.rotSnap = grp.map((leg) => ({ id: leg.id, x: leg.x, z: leg.z, rotY: leg.rotY }));
+      ms.rotSnap = grp.map((leg) => ({ x: leg.x, z: leg.z }));
+      ms.rotLegRefs = grp.slice();
       ms.rotStartRot = hd.rotY;
       ms.mode = 'rotate';
       ms.hid = hd.id;
       ms.downPick = { type: 'hurdle', id: hd.id };
-      ms.rotStartAngle = Math.atan2(groundHit.x - ms.rotPivotX, groundHit.z - ms.rotPivotZ);
+      const a0 = Math.atan2(groundHit.x - ms.rotPivotX, groundHit.z - ms.rotPivotZ);
+      ms.rotStartAngle = a0;
+      ms.rotLastAngle = a0;
+      ms.rotAccRad = 0;
       canvas.classList.add('rotating');
     }
   } else if (h && h.type === 'sensor') {
@@ -2032,25 +2059,31 @@ canvas.addEventListener('pointermove', e => {
     }
   } else if (ms.mode === 'rotate') {
     const p = hitGround(x, y);
-    if (p && ms.rotSnap && ms.rotSnap.length) {
+    if (p && ms.rotSnap && ms.rotLegRefs && ms.rotSnap.length === ms.rotLegRefs.length) {
       const angle = Math.atan2(p.x - ms.rotPivotX, p.z - ms.rotPivotZ);
-      let deltaDeg = (angle - ms.rotStartAngle) * 180 / Math.PI;
+      let d = angle - ms.rotLastAngle;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      ms.rotAccRad += d;
+      ms.rotLastAngle = angle;
+      const deltaDeg = ms.rotAccRad * 180 / Math.PI;
       // Recompute every leg's absolute (x, z, rotY) from the snapshot taken at pointerdown.
-      // This is invariant to per-frame state, so every effort always rotates together.
+      // Index + rotLegRefs: duplicate hurdle ids would make findHurdleById hit the same leg every time.
       const rad = deltaDeg * Math.PI / 180;
       const cos = Math.cos(rad), sin = Math.sin(rad);
       const halfW = arenaW / 2 - 1.8;
       const halfH = arenaH / 2 - 1.8;
-      for (const snap of ms.rotSnap) {
-        const leg = findHurdleById(snap.id);
-        if (!leg) continue;
+      for (let i = 0; i < ms.rotSnap.length; i++) {
+        const leg = ms.rotLegRefs[i];
+        const snap = ms.rotSnap[i];
+        if (!leg || !snap) continue;
         const rx = snap.x - ms.rotPivotX;
         const rz = snap.z - ms.rotPivotZ;
         const nx = rx * cos - rz * sin + ms.rotPivotX;
         const nz = rx * sin + rz * cos + ms.rotPivotZ;
         leg.x = Math.max(-halfW, Math.min(halfW, nx));
         leg.z = Math.max(-halfH, Math.min(halfH, nz));
-        leg.rotY = ((snap.rotY + deltaDeg) % 360 + 360) % 360;
+        leg.rotY = ((ms.rotStartRot + deltaDeg) % 360 + 360) % 360;
         syncTransform(leg);
       }
       updatePath();
@@ -2075,7 +2108,12 @@ canvas.addEventListener('pointermove', e => {
     const data = ms.sensorKind === 'start' ? startSensor : finishSensor;
     if (p && obj && data) {
       const angle = Math.atan2(p.x - obj.position.x, p.z - obj.position.z);
-      const delta = (angle - ms.rotStartAngle) * 180 / Math.PI;
+      let d = angle - ms.rotLastAngle;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      ms.rotAccRad += d;
+      ms.rotLastAngle = angle;
+      const delta = ms.rotAccRad * 180 / Math.PI;
       data.rotY = ((ms.rotStartRot + delta) % 360 + 360) % 360;
       syncSensor(ms.sensorKind); updateInfoPanel();
     }
@@ -2134,6 +2172,9 @@ canvas.addEventListener('pointerup', e => {
   }
   ms.pendingGroundGrab = null;
   ms.down = false; ms.mode = null; ms.hid = null; ms.sensorKind = null; ms.downPick = null;
+  ms.rotSnap = null;
+  ms.rotLegRefs = null;
+  ms.rotAccRad = 0;
 });
 
 canvas.addEventListener('pointerleave', () => {
@@ -2145,6 +2186,9 @@ canvas.addEventListener('pointercancel', () => {
   ms.down = false; ms.mode = null; ms.hid = null; ms.sensorKind = null; ms.downPick = null;
   ms.pendingGroundGrab = null;
   ms.drag = false;
+  ms.rotSnap = null;
+  ms.rotLegRefs = null;
+  ms.rotAccRad = 0;
 });
 
 canvas.addEventListener('wheel', e => {
@@ -2211,6 +2255,7 @@ function placeComboPresetAt(wx, wz) {
   undoBatchIds = placedIds.slice();
   nextNum++;
   comboMode = null;
+  activeManualComboGroupId = null;
   updateComboBtn();
   rmComboGhost();
   updatePath();
@@ -2223,6 +2268,7 @@ function placeComboPresetAt(wx, wz) {
 
 function armComboPreset(type) {
   comboMode = null;
+  activeManualComboGroupId = null;
   updateComboBtn();
   comboPresetSpacing = comboPresetSpacing || 7.5;
   comboPresetConfig = { type, spacingM: comboPresetSpacing };
@@ -2261,23 +2307,32 @@ function updateComboPresetPanel() {
 function placeHurdle(wx, wz) {
   undoBatchIds = null;
   let label;
+  let comboMeta = null;
   if (comboMode) {
     label = comboMode.num + comboMode.suffix;
     const triple = !!comboMode.triple;
     if (comboMode.suffix === 'a') {
+      activeManualComboGroupId = `mcg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    }
+    const cgi = activeManualComboGroupId;
+    const cix = FEI_SUFFIX_RANK[comboMode.suffix];
+    comboMeta = cgi != null ? { comboGroupId: cgi, comboIndex: cix !== undefined ? cix : 0 } : null;
+    if (comboMode.suffix === 'a') {
       comboMode = { num: comboMode.num, suffix: 'b', triple };
     } else if (comboMode.suffix === 'b') {
       if (triple) comboMode = { num: comboMode.num, suffix: 'c', triple };
-      else { comboMode = null; nextNum++; }
+      else { comboMode = null; nextNum++; activeManualComboGroupId = null; }
     } else {
       comboMode = null;
       nextNum++;
+      activeManualComboGroupId = null;
     }
     updateComboBtn();
   } else {
     label = `${nextNum++}`;
   }
   const h = { id: newHurdleId(), label, x: wx, z: wz, rotY: 0 };
+  if (comboMeta) Object.assign(h, comboMeta);
   hurdles.push(h);
   makeHurdle(h);
   mkLabel(h);
@@ -2329,6 +2384,7 @@ function setPlaceMode(mode) {
   placeMode = mode;
   if (comboMode && mode !== 'hurdle') {
     comboMode = null;
+    activeManualComboGroupId = null;
     updateComboBtn();
   }
   if (mode !== 'comboPreset') {
@@ -2399,6 +2455,7 @@ function undoLast() {
       undoBatchIds = null;
       selectedId = null;
       comboMode = null;
+      activeManualComboGroupId = null;
       updateComboBtn();
       updatePath();
       updateInfoPanel(); refreshFei(); updateStatus(); setSelectionVisuals();
@@ -2413,6 +2470,7 @@ function undoLast() {
   const pLab = parseObstacleLabel3d(last.label);
   if (pLab && !pLab.suffix) nextNum = pLab.num;
   comboMode = null;
+  activeManualComboGroupId = null;
   if (selectedId === last.id) selectedId = null;
   updateInfoPanel(); refreshFei(); updateStatus(); updateComboBtn(); setSelectionVisuals();
   if (hurdles.length === 0) showOnboard();
@@ -2432,6 +2490,7 @@ function clearAll() {
   selectedSensor = null;
   updatePath();
   selectedId = null; nextNum = 1; comboMode = null;
+  activeManualComboGroupId = null;
   updateInfoPanel(); refreshFei(); updateStatus(); updateComboBtn(); setSelectionVisuals();
   updateComboPresetPanel();
   showOnboard();
@@ -2440,6 +2499,7 @@ function clearAll() {
 function toggleCombo(ev) {
   if (comboMode) {
     comboMode = null;
+    activeManualComboGroupId = null;
   } else {
     const triple = !!(ev && ev.shiftKey);
     comboMode = { num: nextNum, suffix: 'a', triple };

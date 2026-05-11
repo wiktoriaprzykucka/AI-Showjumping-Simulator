@@ -42,8 +42,8 @@ public class CourseBrowserUI : MonoBehaviour {
     [Tooltip("Height of the panel, in pixels (before uiScale is applied).")]
     [Range(100, 800)] public int panelHeight = 420;
 
-    [Tooltip("Gap between the panel and the screen edge, in pixels.")]
-    [Range(0, 60)] public int panelMargin = 8;
+    [Tooltip("Gap between the panel (after scaling) and the screen edges, in pixels.")]
+    [Range(0, 120)] public int panelMargin = 8;
 
     [Tooltip("Uniform scale — shrinks the whole panel including text. 1 = full size, 0.5 = half. Tune this to control visual size.")]
     [Range(0.35f, 1f)] public float uiScale = 0.55f;
@@ -238,21 +238,36 @@ public class CourseBrowserUI : MonoBehaviour {
     void OnGUI() {
         EnsureStyles();
 
-        // Bottom-right anchor — clamp so the panel can never end up off-screen,
-        // even if the user puts a huge value into panelMargin in the Inspector.
-        int margin = Mathf.Clamp(panelMargin, 0, 60);
-        int w = Mathf.Clamp(panelWidth,  100, Screen.width  - margin * 2);
-        int h = Mathf.Clamp(panelHeight, 100, Screen.height - margin * 2);
-        int x = Mathf.Max(0, Screen.width  - w - margin);
-        int y = Mathf.Max(0, Screen.height - h - margin);
+        // Bottom-right pivot + ScaleAroundPivot: visual size is (w × scale, h × scale).
+        // Layout size must be capped using maxW,maxH /= scale so the scaled panel stays
+        // fully inside [margin, Screen − margin].
+        int margin = Mathf.Clamp(panelMargin, 0, 120);
+        margin = Mathf.Min(margin, Mathf.Max(0, Screen.width / 2 - 8));
+        margin = Mathf.Min(margin, Mathf.Max(0, Screen.height / 2 - 8));
 
         float scale = Mathf.Clamp(uiScale, 0.35f, 1f);
+        float safeW = Mathf.Max(0f, Screen.width - 2f * margin);
+        float safeH = Mathf.Max(0f, Screen.height - 2f * margin);
+        float maxLayoutW = safeW / scale;
+        float maxLayoutH = safeH / scale;
+
+        int upperW = Mathf.Max(1, Mathf.FloorToInt(maxLayoutW));
+        int upperH = Mathf.Max(1, Mathf.FloorToInt(maxLayoutH));
+        int w = Mathf.Clamp(panelWidth, Mathf.Min(100, upperW), upperW);
+        int h = Mathf.Clamp(panelHeight, Mathf.Min(100, upperH), upperH);
+
+        int x = Mathf.Max(margin, Screen.width - margin - w);
+        int y = Mathf.Max(margin, Screen.height - margin - h);
+
         Matrix4x4 oldMatrix = GUI.matrix;
         Vector2 panelBottomRight = new Vector2(Screen.width - margin, Screen.height - margin);
         GUIUtility.ScaleAroundPivot(new Vector2(scale, scale), panelBottomRight);
 
         if (!_visible) {
-            var hintRect = new Rect(Screen.width - 230 - panelMargin, Screen.height - 24 - panelMargin, 230, 24);
+            float hw = Mathf.Min(230f, Mathf.Max(40f, safeW));
+            float hintX = Mathf.Max(margin, Screen.width - hw - margin);
+            float hintY = Mathf.Max(margin, Screen.height - 24 - margin);
+            var hintRect = new Rect(hintX, hintY, hw, 24);
             GUI.Label(hintRect,
                 $"Press <color=yellow>{toggleKey}</color> for course browser",
                 _hintStyle);

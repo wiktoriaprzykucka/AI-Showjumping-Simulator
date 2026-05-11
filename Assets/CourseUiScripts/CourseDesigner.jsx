@@ -3,6 +3,32 @@ import { useState, useRef, useCallback, useMemo } from "react";
 const PADDING = 32;
 const UNITY_SCALE = 10;
 
+/** Strictly unique — Date.now() alone can collide for rapid combo placement (rotate Map + updates broke on duplicate ids). */
+let __courseHurdleSeq = 0;
+function newCourseHurdleId() {
+  return `fh${Date.now().toString(36)}_${(__courseHurdleSeq++).toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+const FEI_SUFFIX_RANK_JSX = { a: 0, b: 1, c: 2 };
+
+/** Session id for C-key combo legs (matches 3D designer: non‑consecutive same numbers still rotate together). */
+let activeManualComboGroupIdJsx = null;
+
+function sortComboPoolByLegOrder(pool) {
+  return pool.slice().sort((a, b) => {
+    const ia = a.comboIndex, ib = b.comboIndex;
+    if (ia != null && ib != null) return ia - ib;
+    if (ia != null) return -1;
+    if (ib != null) return 1;
+    const pa = parseObstacleLabel(a.label);
+    const pb = parseObstacleLabel(b.label);
+    const ra = pa?.suffix ? (FEI_SUFFIX_RANK_JSX[pa.suffix] ?? 99) : 99;
+    const rb = pb?.suffix ? (FEI_SUFFIX_RANK_JSX[pb.suffix] ?? 99) : 99;
+    if (ra !== rb) return ra - rb;
+    return String(a.label).localeCompare(String(b.label), undefined, { numeric: true });
+  });
+}
+
 // ─── FEI path / obstacle helpers ───────────────────────────────────────
 function parseObstacleLabel(label) {
   const m = /^(\d+)([abc])?$/i.exec(String(label ?? "").trim());
@@ -34,11 +60,17 @@ function groupHurdlesIntoObstacles(hurdles) {
 }
 
 function getComboGroupFor(hurdles, id) {
-  const target = hurdles.find(h => h.id === id);
+  const target = hurdles.find((h) => h.id === id);
   if (!target) return [];
+  const gid = target.comboGroupId;
+  if (gid != null && gid !== "") {
+    const gs = String(gid);
+    const pool = hurdles.filter((h) => h.comboGroupId != null && String(h.comboGroupId) === gs);
+    if (pool.length >= 2) return sortComboPoolByLegOrder(pool);
+  }
   const groups = groupHurdlesIntoObstacles(hurdles);
   for (const g of groups) {
-    if (g.some(h => h.id === id)) return g;
+    if (g.some((h) => h.id === id)) return g;
   }
   return [target];
 }
@@ -423,24 +455,42 @@ export default function CourseDesigner() {
 
     if (tool !== "add") return;
 
-    let label;
     if (comboMode) {
-      label = `${comboMode.num}${comboMode.suffix}`;
+      const suffix = comboMode.suffix;
+      const label = `${comboMode.num}${suffix}`;
       const triple = !!comboMode.triple;
-      if (comboMode.suffix === "a") setComboMode({ num: comboMode.num, suffix: "b", triple });
-      else if (comboMode.suffix === "b") {
+      if (suffix === "a") {
+        activeManualComboGroupIdJsx = `mcg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      }
+      const comboGroupId = activeManualComboGroupIdJsx;
+      const comboIndex = FEI_SUFFIX_RANK_JSX[suffix] ?? 0;
+      if (suffix === "a") setComboMode({ num: comboMode.num, suffix: "b", triple });
+      else if (suffix === "b") {
         if (triple) setComboMode({ num: comboMode.num, suffix: "c", triple });
-        else { setComboMode(null); setNextNum((n) => n + 1); }
+        else {
+          setComboMode(null);
+          activeManualComboGroupIdJsx = null;
+          setNextNum((n) => n + 1);
+        }
       } else {
         setComboMode(null);
+        activeManualComboGroupIdJsx = null;
         setNextNum((n) => n + 1);
       }
-    } else {
-      label = `${nextNum}`;
-      setNextNum(n => n+1);
+      const id = newCourseHurdleId();
+      setHurdles((prev) => [
+        ...prev,
+        { id, x: cx, y: cy, rotation: 0, label, comboGroupId, comboIndex },
+      ]);
+      setSelectedId(id);
+      setSelectedSensor(null);
+      return;
     }
-    const id = Date.now();
-    setHurdles(prev => [...prev, { id, x: cx, y: cy, rotation: 0, label }]);
+
+    const label = `${nextNum}`;
+    setNextNum((n) => n + 1);
+    const id = newCourseHurdleId();
+    setHurdles((prev) => [...prev, { id, x: cx, y: cy, rotation: 0, label }]);
     setSelectedId(id);
     setSelectedSensor(null);
   }, [tool, getSVGPos, comboMode, nextNum, clampArena]);
@@ -453,7 +503,6 @@ export default function CourseDesigner() {
     if (tool !== "select" && tool !== "rotate") return;
 
     const group = getComboGroupFor(hurdles, id);
-    const groupIds = new Set(group.map(h => h.id));
     const start = getSVGPos(e);
 
     // AbortController guarantees listeners are torn down on pointerup OR pointercancel,
@@ -462,23 +511,25 @@ export default function CourseDesigner() {
     const signal = ac.signal;
 
     if (tool === "select") {
-      const origs = new Map(group.map(h => [h.id, { x: h.x, y: h.y }]));
+      const origs = group.map((h) => ({ x: h.x, y: h.y }));
       const onMove = (ev) => {
         const cur = getSVGPos(ev);
         let dx = cur.x - start.x;
         let dy = cur.y - start.y;
-        // clamp delta so no group member leaves the arena
-        for (const h of group) {
-          const o = origs.get(h.id);
+        for (let gi = 0; gi < group.length; gi++) {
+          const o = origs[gi];
           const c = clampArena(o.x + dx, o.y + dy);
           dx = c.x - o.x;
           dy = c.y - o.y;
         }
-        setHurdles(prev => prev.map(h => {
-          if (!groupIds.has(h.id)) return h;
-          const o = origs.get(h.id);
-          return { ...h, x: o.x + dx, y: o.y + dy };
-        }));
+        setHurdles((prev) =>
+          prev.map((h) => {
+            const gi = group.findIndex((g) => g.id === h.id);
+            if (gi < 0) return h;
+            const o = origs[gi];
+            return { ...h, x: o.x + dx, y: o.y + dy };
+          }),
+        );
       };
       window.addEventListener("pointermove", onMove, { signal });
       window.addEventListener("pointerup", () => ac.abort(), { signal });
@@ -490,17 +541,24 @@ export default function CourseDesigner() {
       // pivot = centroid of the entire combination so all efforts swing as one rigid obstacle
       const pivotX = group.reduce((s, h) => s + h.x, 0) / group.length;
       const pivotY = group.reduce((s, h) => s + h.y, 0) / group.length;
-      const startAngle = Math.atan2(start.y - pivotY, start.x - pivotX) * 180 / Math.PI;
-      const origs = new Map(group.map(h => [h.id, { x: h.x, y: h.y, rotation: h.rotation }]));
+      let lastAngleRad = Math.atan2(start.y - pivotY, start.x - pivotX);
+      let accRad = 0;
+      const origs = group.map(h => ({ x: h.x, y: h.y, rotation: h.rotation }));
       const onMove = (ev) => {
         const cur = getSVGPos(ev);
-        const angle = Math.atan2(cur.y - pivotY, cur.x - pivotX) * 180 / Math.PI;
-        const deltaDeg = angle - startAngle;
-        const rad = deltaDeg * Math.PI / 180;
+        const angleRad = Math.atan2(cur.y - pivotY, cur.x - pivotX);
+        let d = angleRad - lastAngleRad;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        accRad += d;
+        lastAngleRad = angleRad;
+        const deltaDeg = accRad * 180 / Math.PI;
+        const rad = accRad;
         const cos = Math.cos(rad), sin = Math.sin(rad);
         setHurdles(prev => prev.map(h => {
-          const o = origs.get(h.id);
-          if (!o) return h;
+          const gi = group.findIndex(g => g.id === h.id);
+          if (gi < 0) return h;
+          const o = origs[gi];
           const rx = o.x - pivotX;
           const ry = o.y - pivotY;
           const nx = rx * cos - ry * sin + pivotX;
@@ -550,13 +608,20 @@ export default function CourseDesigner() {
 
     if (tool === "rotate") {
       const cx = pt.x, cy = pt.y, origRot = pt.rotation;
-      const startAngle = Math.atan2(start.y - cy, start.x - cx) * 180 / Math.PI;
+      let lastAngleRad = Math.atan2(start.y - cy, start.x - cx);
+      let accRad = 0;
       const onMove = (ev) => {
         const cur = getSVGPos(ev);
-        const angle = Math.atan2(cur.y - cy, cur.x - cx) * 180 / Math.PI;
+        const angleRad = Math.atan2(cur.y - cy, cur.x - cx);
+        let d = angleRad - lastAngleRad;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        accRad += d;
+        lastAngleRad = angleRad;
+        const deltaDeg = accRad * 180 / Math.PI;
         setFn(prev => ({
           ...prev,
-          rotation: (origRot + angle - startAngle + 360) % 360,
+          rotation: (origRot + deltaDeg + 360) % 360,
         }));
       };
       window.addEventListener("pointermove", onMove, { signal });
@@ -609,7 +674,7 @@ export default function CourseDesigner() {
     const last = hurdles[hurdles.length - 1];
     setHurdles(prev => prev.slice(0, -1));
     const num = parseInt(last.label);
-    if (!isNaN(num)) { setNextNum(num); setComboMode(null); }
+    if (!isNaN(num)) { setNextNum(num); setComboMode(null); activeManualComboGroupIdJsx = null; }
     if (selectedId === last.id) setSelectedId(null);
   };
 
@@ -661,7 +726,10 @@ export default function CourseDesigner() {
 
   const TB = ({ id, icon, label }) => (
     <button onClick={() => {
-      if (id !== "add") setComboMode(null);
+      if (id !== "add") {
+        setComboMode(null);
+        activeManualComboGroupIdJsx = null;
+      }
       setTool(id);
     }} style={{
       display:"flex", alignItems:"center", gap:"8px", width:"100%",
@@ -813,7 +881,7 @@ export default function CourseDesigner() {
               ? `Placing ${comboMode.num}${comboMode.suffix} (${comboMode.triple ? "triple" : "double"})`
               : "Start Combo (Shift = triple)"}
           </button>
-          {comboMode && <button onClick={()=>setComboMode(null)} style={{ width:"100%", padding:"5px 12px", fontFamily:"Georgia, serif", fontSize:"11px", border:"1px solid #d0c9b8", background:"transparent", color:"#aaa", cursor:"pointer", borderRadius:"2px" }}>Cancel</button>}
+          {comboMode && <button onClick={()=>{ activeManualComboGroupIdJsx = null; setComboMode(null); }} style={{ width:"100%", padding:"5px 12px", fontFamily:"Georgia, serif", fontSize:"11px", border:"1px solid #d0c9b8", background:"transparent", color:"#aaa", cursor:"pointer", borderRadius:"2px" }}>Cancel</button>}
 
           <div style={{ height:"14px" }} />
           <SL t="Arena Size (m)" />
@@ -874,7 +942,7 @@ export default function CourseDesigner() {
           <button onClick={undo} style={{ width:"100%", padding:"8px 12px", marginBottom:"5px", fontFamily:"Georgia,serif", fontSize:"12px", border:"1px solid #d0c9b8", background:"transparent", color:"#3a3020", cursor:"pointer", borderRadius:"2px" }}>
             ↩ Undo
           </button>
-          <button onClick={()=>{ setHurdles([]); setSelectedId(null); setNextNum(1); setComboMode(null); setStartSensor(null); setFinishSensor(null); setSelectedSensor(null); }}
+          <button onClick={()=>{ setHurdles([]); setSelectedId(null); setNextNum(1); setComboMode(null); activeManualComboGroupIdJsx = null; setStartSensor(null); setFinishSensor(null); setSelectedSensor(null); }}
             style={{ width:"100%", padding:"8px 12px", fontFamily:"Georgia,serif", fontSize:"12px", border:"1px solid #c0392b", background:"transparent", color:"#c0392b", cursor:"pointer", borderRadius:"2px" }}>
             Clear all
           </button>
