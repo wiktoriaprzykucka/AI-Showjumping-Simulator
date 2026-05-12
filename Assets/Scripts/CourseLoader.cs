@@ -153,11 +153,12 @@ public class CourseLoader : MonoBehaviour {
     public GameObject startSensorVisualPrefab;
     public GameObject finishSensorVisualPrefab;
 
-    [Tooltip("Degrees added to JSON `startSensor` / `finishSensor` rotationY when spawning sensors. " +
-             "CourseDesigner3D (Three.js) uses local −Z as the teal \"forward\" arrow; Unity uses +Z — " +
-             "default 180° makes `transform.forward`, path tangents (`CoursePathManager`), and horse spawn yaw " +
-             "match the designer. Set to **0** if your JSON was built for raw Unity yaw (e.g. some 2D SVG exports).")]
-    public float importedSensorRotationYOffsetDegrees = 180f;
+    [Tooltip("Degrees added to JSON `rotationY` for **hurdles** plus **start/finish sensors**. " +
+             "CourseDesigner3D uses local −Z as jump/teal-forward; Unity uses +Z — default 180° aligns obstacle " +
+             "`transform.forward`, triggers, sensors, path tangents (`CoursePathManager`), and HorseAgent headings " +
+             "with the designer. Set to **0** for JSON built for raw Unity yaw (e.g. some 2D SVG exports).")]
+    [FormerlySerializedAs("importedSensorRotationYOffsetDegrees")]
+    public float importedDesignerRotationYOffsetDegrees = 180f;
 
     [Tooltip("Quick size presets for the finish gate BoxCollider trigger. " +
              "Non-Custom presets overwrite Width/Height/Depth whenever the Inspector validates — " +
@@ -403,11 +404,16 @@ public class CourseLoader : MonoBehaviour {
             coursePathManager.RebuildPath();
     }
 
+    /// <summary>
+    /// World Y rotation for hurdles/sensors loaded from designer JSON (<see cref="importedDesignerRotationYOffsetDegrees"/>).
+    /// </summary>
+    Quaternion RotationFromDesignerJsonYaw(float rotationYDeg) =>
+        Quaternion.Euler(0f, rotationYDeg + importedDesignerRotationYOffsetDegrees, 0f);
+
     GameObject CreateCourseSensor(string sensorName, Vector3 worldPos, float rotY) {
         var go = new GameObject(sensorName);
         go.transform.SetParent(transform);
-        float yaw = rotY + importedSensorRotationYOffsetDegrees;
-        go.transform.SetPositionAndRotation(worldPos, Quaternion.Euler(0f, yaw, 0f));
+        go.transform.SetPositionAndRotation(worldPos, RotationFromDesignerJsonYaw(rotY));
 
         if (sensorName == "Course_FinishSensor") {
             TrySetTag(go, "Finish");
@@ -585,7 +591,7 @@ public class CourseLoader : MonoBehaviour {
         var parent = new GameObject(name);
         parent.transform.SetParent(transform);
         parent.transform.position = pos;
-        parent.transform.rotation = Quaternion.Euler(0, rotY, 0);
+        parent.transform.rotation = RotationFromDesignerJsonYaw(rotY);
         TrySetTag(parent, "Hurdle");
 
         // Posts
@@ -639,7 +645,7 @@ public class CourseLoader : MonoBehaviour {
         var go = Instantiate(hurdlePrefab, transform);
         go.name = name;
         go.transform.position = pos;
-        go.transform.rotation = Quaternion.Euler(0f, rotY, 0f);
+        go.transform.rotation = RotationFromDesignerJsonYaw(rotY);
 
         // Tag should already be "Hurdle" on the prefab root, but enforce it so a misconfigured
         // prefab doesn't silently break HorseAgent's OnCollisionEnter classification.
