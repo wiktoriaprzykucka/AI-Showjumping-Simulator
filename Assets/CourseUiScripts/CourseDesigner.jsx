@@ -234,6 +234,118 @@ function approachLandingIssuesxz(pts, hasStart, hasFinish) {
   return out;
 }
 
+/** Matches 3D: local −Z from rotY in Unity XZ (same as CourseLoader / export). */
+function jumpForwardUnityxz(rotDeg) {
+  const rad = (rotDeg * Math.PI) / 180;
+  return { x: Math.sin(rad), z: -Math.cos(rad) };
+}
+
+function sensorObstacleAxisIssuesxz(hurdles, startSensor, finishSensor, canvasH) {
+  const out = [];
+  if (!hurdles.length) return out;
+  const warnDeg = 8;
+  const invalidDeg = 15;
+  const minSepM = 0.25;
+
+  function angleFromUnitAxis(vx, vz, ax, az) {
+    const lv = Math.hypot(vx, vz);
+    if (lv < 1e-6) return 0;
+    const dot = (vx * ax + vz * az) / lv;
+    return Math.acos(Math.max(-1, Math.min(1, dot))) * (180 / Math.PI);
+  }
+
+  const first = hurdles[0];
+  const last = hurdles[hurdles.length - 1];
+  const c0 = svgToUnityxz(first.x, first.y, canvasH);
+  const cL = svgToUnityxz(last.x, last.y, canvasH);
+  const f0 = jumpForwardUnityxz(first.rotation);
+  const fL = jumpForwardUnityxz(last.rotation);
+
+  if (startSensor) {
+    const s = svgToUnityxz(startSensor.x, startSensor.y, canvasH);
+    const ax = -f0.x;
+    const az = -f0.z;
+    const vx = s.x - c0.x;
+    const vz = s.z - c0.z;
+    const dist = Math.hypot(vx, vz);
+    if (dist < minSepM) {
+      out.push({
+        level: "invalid",
+        code: "start-sensor-center",
+        msg: "Start sensor is on or too close to the first obstacle center.",
+        fix: "Move the start back along the approach line from fence 1’s center (opposite the hurdle arrow).",
+      });
+    } else if (vx * ax + vz * az < 0) {
+      out.push({
+        level: "invalid",
+        code: "start-sensor-side",
+        msg: "Start sensor is not on the approach side of fence 1 — it must lie on the straight line through that center.",
+        fix: "Place the start behind fence 1 on the line through its center and approach direction.",
+      });
+    } else {
+      const ang = angleFromUnitAxis(vx, vz, ax, az);
+      if (ang > invalidDeg) {
+        out.push({
+          level: "invalid",
+          code: "start-axis",
+          msg: `Start sensor is ~${ang.toFixed(0)}° off the approach line through fence 1’s center.`,
+          fix: "Slide the start onto that straight line through the obstacle center.",
+        });
+      } else if (ang > warnDeg) {
+        out.push({
+          level: "warn",
+          code: "start-axis-soft",
+          msg: `Start sensor is ~${ang.toFixed(0)}° off the line through fence 1’s center.`,
+          fix: "Align it on the approach axis through the first fence center for layout rules.",
+        });
+      }
+    }
+  }
+
+  if (finishSensor) {
+    const s = svgToUnityxz(finishSensor.x, finishSensor.y, canvasH);
+    const ax = fL.x;
+    const az = fL.z;
+    const vx = s.x - cL.x;
+    const vz = s.z - cL.z;
+    const dist = Math.hypot(vx, vz);
+    if (dist < minSepM) {
+      out.push({
+        level: "invalid",
+        code: "finish-sensor-center",
+        msg: "Finish sensor is on or too close to the last obstacle center.",
+        fix: "Move the finish farther along the getaway line from the last fence center.",
+      });
+    } else if (vx * ax + vz * az < 0) {
+      out.push({
+        level: "invalid",
+        code: "finish-sensor-side",
+        msg: "Finish sensor is not on the getaway side of the last fence — it must lie on the straight line through that center.",
+        fix: "Place the finish past the last obstacle along the jump arrow direction from its center.",
+      });
+    } else {
+      const ang = angleFromUnitAxis(vx, vz, ax, az);
+      if (ang > invalidDeg) {
+        out.push({
+          level: "invalid",
+          code: "finish-axis",
+          msg: `Finish sensor is ~${ang.toFixed(0)}° off the getaway line through the last obstacle’s center.`,
+          fix: "Slide the finish onto that straight line from the last fence center.",
+        });
+      } else if (ang > warnDeg) {
+        out.push({
+          level: "warn",
+          code: "finish-axis-soft",
+          msg: `Finish sensor is ~${ang.toFixed(0)}° off the line through the last fence center.`,
+          fix: "Align it on the getaway axis through the last obstacle center.",
+        });
+      }
+    }
+  }
+
+  return out;
+}
+
 function HurdleSymbol({ hurdle, isSelected, onPointerDown }) {
   const col = isSelected ? "#b8860b" : "#1a1a1a";
   return (
@@ -405,6 +517,7 @@ export default function CourseDesigner() {
     });
 
     issues.push(...comboSpacingIssues(groups, canvasH));
+    issues.push(...sensorObstacleAxisIssuesxz(hurdles, startSensor, finishSensor, canvasH));
     if (pts.length >= 3) {
       issues.push(...sharpTurnIssues(pts));
       issues.push(...wallProximityIssuesxz(pts, arenaW, arenaH));

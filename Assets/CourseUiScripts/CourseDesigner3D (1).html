@@ -2717,6 +2717,101 @@ function comboSpacingIssues3d(groups) {
   return out;
 }
 
+/** Start / finish must sit on the straight line through each obstacle’s center along jump approach / getaway (user placement; validation only). */
+function sensorObstacleAxisIssues3d() {
+  const out = [];
+  if (!hurdles.length) return out;
+  const warnDeg = 8;
+  const invalidDeg = 15;
+  const minSepM = 0.25;
+
+  function angleFromUnitAxis(vx, vz, ax, az) {
+    const lv = hypot(vx, vz);
+    if (lv < 1e-6) return 0;
+    const dot = (vx * ax + vz * az) / lv;
+    return Math.acos(Math.max(-1, Math.min(1, dot))) * (180 / Math.PI);
+  }
+
+  const first = hurdles[0];
+  const last = hurdles[hurdles.length - 1];
+
+  if (startSensor) {
+    const f = jumpForwardDir(first.rotY);
+    const ax = -f.x;
+    const az = -f.z;
+    const vx = startSensor.x - first.x;
+    const vz = startSensor.z - first.z;
+    const dist = hypot(vx, vz);
+    if (dist < minSepM) {
+      out.push({
+        level: 'invalid',
+        msg: 'Start sensor is on or too close to the first obstacle center.',
+        fix: 'Move the start back along the approach line from the center of fence 1 (opposite the teal jump arrow).',
+      });
+    } else if (vx * ax + vz * az < 0) {
+      out.push({
+        level: 'invalid',
+        msg: 'Start sensor is not on the approach side of fence 1 — it must lie on the straight line through the fence center.',
+        fix: 'Place the start behind fence 1 on the same line as its center and approach direction.',
+      });
+    } else {
+      const ang = angleFromUnitAxis(vx, vz, ax, az);
+      if (ang > invalidDeg) {
+        out.push({
+          level: 'invalid',
+          msg: `Start sensor is ~${ang.toFixed(0)}° off the approach line through fence 1’s center.`,
+          fix: 'Slide the start onto that straight line (same line as the obstacle center and approach).',
+        });
+      } else if (ang > warnDeg) {
+        out.push({
+          level: 'warn',
+          msg: `Start sensor is ~${ang.toFixed(0)}° off the line through fence 1’s center — align for course rules.`,
+          fix: 'Keep the start on the approach axis through the center of the first fence.',
+        });
+      }
+    }
+  }
+
+  if (finishSensor) {
+    const f = jumpForwardDir(last.rotY);
+    const ax = f.x;
+    const az = f.z;
+    const vx = finishSensor.x - last.x;
+    const vz = finishSensor.z - last.z;
+    const dist = hypot(vx, vz);
+    if (dist < minSepM) {
+      out.push({
+        level: 'invalid',
+        msg: 'Finish sensor is on or too close to the last obstacle center.',
+        fix: 'Move the finish farther along the getaway line from the last fence center.',
+      });
+    } else if (vx * ax + vz * az < 0) {
+      out.push({
+        level: 'invalid',
+        msg: 'Finish sensor is not on the getaway side of the last fence — it must lie on the straight line through that center.',
+        fix: 'Place the finish past the last obstacle along the teal jump-arrow direction from its center.',
+      });
+    } else {
+      const ang = angleFromUnitAxis(vx, vz, ax, az);
+      if (ang > invalidDeg) {
+        out.push({
+          level: 'invalid',
+          msg: `Finish sensor is ~${ang.toFixed(0)}° off the getaway line through the last obstacle’s center.`,
+          fix: 'Slide the finish onto that straight line from the center of the last fence.',
+        });
+      } else if (ang > warnDeg) {
+        out.push({
+          level: 'warn',
+          msg: `Finish sensor is ~${ang.toFixed(0)}° off the line through the last fence center — align for course rules.`,
+          fix: 'Keep the finish on the getaway axis through the center of the last obstacle.',
+        });
+      }
+    }
+  }
+
+  return out;
+}
+
 function sharpTurnIssues3d(pts, minTurnDeg = 38) {
   const out = [];
   for (let i = 1; i < pts.length - 1; i++) {
@@ -2843,6 +2938,7 @@ function computeFeiBundle3d() {
   });
 
   issues.push(...comboSpacingIssues3d(groups));
+  issues.push(...sensorObstacleAxisIssues3d());
   if (pts.length >= 3) {
     issues.push(...sharpTurnIssues3d(pts));
     issues.push(...wallProximityIssues3d(pts, arenaW, arenaH));
