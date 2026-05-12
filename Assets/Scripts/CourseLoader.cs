@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Serialization;
 using Unity.MLAgents.Sensors;
@@ -364,6 +365,7 @@ public class CourseLoader : MonoBehaviour {
             // Name MUST match what HorseAgent expects: $"Hurdle_{currentHurdle + 1}"
             string objName = $"Hurdle_{i + 1}";
             var hurdle = CreateHurdle(objName, hd.unityPosition.ToVector3(), hd.rotationY, h);
+            ApplyHurdleOrderLabel(hurdle, i + 1);
             spawned.Add(hurdle.transform);
         }
 
@@ -577,6 +579,28 @@ public class CourseLoader : MonoBehaviour {
         }
         spawned.Clear();
         arenaObjects.Clear();
+    }
+
+    /// <summary>
+    /// Sets world TMP digits to match course order (same index as <c>Hurdle_1</c>… naming).
+    /// Works when the prefab has <see cref="HurdleOrderLabel"/> or any child <see cref="TMP_Text"/>.
+    /// </summary>
+    static void ApplyHurdleOrderLabel(GameObject hurdleRoot, int order1Based)
+    {
+        if (hurdleRoot == null) return;
+
+        var binder = hurdleRoot.GetComponentInChildren<HurdleOrderLabel>(true);
+        if (binder != null)
+        {
+            binder.SetOrder(order1Based);
+            return;
+        }
+
+        foreach (var tmp in hurdleRoot.GetComponentsInChildren<TMP_Text>(true))
+        {
+            tmp.text = order1Based.ToString();
+            HurdleOrderLabel.FitRectForDigits(tmp, tmp.text);
+        }
     }
 
     // ─── Building one hurdle ─────────────────────────────────────────────
