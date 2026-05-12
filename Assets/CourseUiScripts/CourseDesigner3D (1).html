@@ -1486,8 +1486,16 @@ const M = {
   handle:  new THREE.MeshBasicMaterial({ color: ACCENT_HEX, transparent: true, opacity: 0 }),
   ring:    new THREE.MeshBasicMaterial({ color: ACCENT_HEX, side: THREE.DoubleSide, transparent: true, opacity: 0 }),
   ringInner: new THREE.MeshBasicMaterial({ color: ACCENT_HEX, side: THREE.DoubleSide, transparent: true, opacity: 0 }),
-  /** Invisible footing — hurdles use this for dependable ray-hit when dragging/moving */
-  pick: new THREE.MeshBasicMaterial({ visible: false, depthWrite: false }),
+  /**
+   * Footing hit volume for pointer picks. Must stay material.visible === true or Three.js raycaster
+   * skips the mesh (r128). Opacity 0 + no depth write keeps it invisible but pickable.
+   */
+  pick: new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    visible: true,
+  }),
 };
 
 function makeHurdle(h) {
@@ -1563,7 +1571,7 @@ function makeHurdle(h) {
   // Big invisible hit area for the handle (generous — thin arrow 3D mesh raycasts can be finicky)
   const hitArea = new THREE.Mesh(
     new THREE.BoxGeometry(0.85, 0.55, 2.5),
-    new THREE.MeshBasicMaterial({ visible: false })
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, visible: true })
   );
   hitArea.position.set(0, 0.25, -1.7);
   hitArea.userData = { hid: h.id, type: 'rotateHandle' };
@@ -1855,12 +1863,12 @@ function hitScene(cx, cy) {
     }
   });
 
+  // Only pickSlab per hurdle — rails miss at shallow angles, and selection rings (2m+) steal rays
+  // toward fences “behind” the ring on the same view ray (felt like “only the first fence moves”).
   const hMeshes = [];
-  hObjs.forEach((o, hid) => {
-    o.children.forEach(c => {
-      if (c.name === 'rotHandle') return;
-      c.traverse(child => { if (child.isMesh) hMeshes.push(child); });
-    });
+  hObjs.forEach((o) => {
+    const slab = o.getObjectByName('pickSlab');
+    if (slab) hMeshes.push(slab);
   });
   const hHit = rc.intersectObjects(hMeshes, false);
   if (hHit.length && bestSens !== null) {
