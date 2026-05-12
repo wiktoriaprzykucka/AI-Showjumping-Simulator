@@ -155,9 +155,10 @@ public class CourseLoader : MonoBehaviour {
     public GameObject finishSensorVisualPrefab;
 
     [Tooltip("Degrees added to JSON `rotationY` for **hurdles** plus **start/finish sensors**. " +
-             "CourseDesigner3D uses local −Z as jump/teal-forward; Unity uses +Z — default 180° aligns obstacle " +
-             "`transform.forward`, triggers, sensors, path tangents (`CoursePathManager`), and HorseAgent headings " +
-             "with the designer. Set to **0** for JSON built for raw Unity yaw (e.g. some 2D SVG exports).")]
+             "The 3D HTML designer (`CourseDesigner.html`) uses local −Z as jump/teal-forward; Unity uses +Z — " +
+             "default 180° aligns obstacle `transform.forward`, triggers, sensors, path tangents (`CoursePathManager`), " +
+             "and HorseAgent headings with the designer. Set to **0** for JSON built for raw Unity yaw " +
+             "(e.g. some 2D SVG exports).")]
     [FormerlySerializedAs("importedSensorRotationYOffsetDegrees")]
     public float importedDesignerRotationYOffsetDegrees = 180f;
 
