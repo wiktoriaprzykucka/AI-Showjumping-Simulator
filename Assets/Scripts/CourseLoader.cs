@@ -153,6 +153,12 @@ public class CourseLoader : MonoBehaviour {
     public GameObject startSensorVisualPrefab;
     public GameObject finishSensorVisualPrefab;
 
+    [Tooltip("Degrees added to JSON `startSensor` / `finishSensor` rotationY when spawning sensors. " +
+             "CourseDesigner3D (Three.js) uses local −Z as the teal \"forward\" arrow; Unity uses +Z — " +
+             "default 180° makes `transform.forward`, path tangents (`CoursePathManager`), and horse spawn yaw " +
+             "match the designer. Set to **0** if your JSON was built for raw Unity yaw (e.g. some 2D SVG exports).")]
+    public float importedSensorRotationYOffsetDegrees = 180f;
+
     [Tooltip("Quick size presets for the finish gate BoxCollider trigger. " +
              "Non-Custom presets overwrite Width/Height/Depth whenever the Inspector validates — " +
              "switch to **Custom** to keep manual sizes.")]
@@ -400,7 +406,8 @@ public class CourseLoader : MonoBehaviour {
     GameObject CreateCourseSensor(string sensorName, Vector3 worldPos, float rotY) {
         var go = new GameObject(sensorName);
         go.transform.SetParent(transform);
-        go.transform.SetPositionAndRotation(worldPos, Quaternion.Euler(0f, rotY, 0f));
+        float yaw = rotY + importedSensorRotationYOffsetDegrees;
+        go.transform.SetPositionAndRotation(worldPos, Quaternion.Euler(0f, yaw, 0f));
 
         if (sensorName == "Course_FinishSensor") {
             TrySetTag(go, "Finish");

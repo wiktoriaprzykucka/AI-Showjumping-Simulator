@@ -403,7 +403,13 @@ public class HorseAgent : Agent
             Vector3 localOffset = spawnLocalPosition + jitter;
             Vector3 worldPos = startPt.position + startPt.rotation * localOffset;
             float yaw = startPt.eulerAngles.y + yawExtra;
-            transform.SetPositionAndRotation(worldPos, Quaternion.Euler(0f, yaw, 0f));
+            Quaternion worldRot = Quaternion.Euler(0f, yaw, 0f);
+            transform.SetPositionAndRotation(worldPos, worldRot);
+            if (rb != null)
+            {
+                rb.position = worldPos;
+                rb.rotation = worldRot;
+            }
         }
         else
         {
@@ -412,6 +418,11 @@ public class HorseAgent : Agent
                 0f,
                 applyJitter ? Random.Range(-spawnYawJitterDeg, spawnYawJitterDeg) : 0f,
                 0f);
+            if (rb != null)
+            {
+                rb.position = transform.position;
+                rb.rotation = transform.rotation;
+            }
         }
     }
 

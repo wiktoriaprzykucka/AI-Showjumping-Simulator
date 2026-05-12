@@ -3008,6 +3008,8 @@ function buildExportData() {
       rotationY: Math.round(h.rotY),
     })),
   };
+  // Sensor rotationY matches designer `rotY` (+Y). Teal arrow / jump direction use local −Z in Three.js;
+  // Unity expects +Z forward — CourseLoader.importedSensorRotationYOffsetDegrees (default 180) fixes import.
   if (startSensor) {
     o.startSensor = {
       unityPosition: { x: +startSensor.x.toFixed(2), y: 0, z: +startSensor.z.toFixed(2) },

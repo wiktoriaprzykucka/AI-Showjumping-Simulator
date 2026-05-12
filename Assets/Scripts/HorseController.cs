@@ -417,21 +417,23 @@ public class HorseController : MonoBehaviour
     {
         if (startPoint == null) return;
 
-        transform.position = startPoint.position;
+        // Face the same heading as the start sensor (travel direction); do not look at the
+        // first target here — that made the horse start turned toward the objective instead.
+        Quaternion spawnRot = Quaternion.Euler(0f, startPoint.eulerAngles.y, 0f);
+        transform.SetPositionAndRotation(startPoint.position, spawnRot);
+
+        var rb = GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.position = transform.position;
+            rb.rotation = transform.rotation;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+
         isMoving = false;
         isJumping = false;
         hasJumped = false;
         jumpProgress = 0f;
-
-        if (targetPoint != null)
-        {
-            Vector3 lookDir = (targetPoint.position - transform.position).normalized;
-            lookDir.y = 0f;
-
-            if (lookDir != Vector3.zero)
-            {
-                transform.forward = lookDir;
-            }
-        }
     }
 }
