@@ -4398,7 +4398,7 @@ Transform:
   m_GameObject: {fileID: 1077213309}
   serializedVersion: 2
   m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
-  m_LocalPosition: {x: 0, y: 3, z: 0}
+  m_LocalPosition: {x: -288, y: 486, z: 498}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -7898,8 +7898,10 @@ MonoBehaviour:
   pauseOnPlay: 1
   runTimeScale: 1
   beginRoundKey: 13
+  openSetupKey: 284
   title: Parkour setup
   body: Open F2 for the course list, pick a JSON, then press Begin round.
+  quickStartMode: 0
 --- !u!4 &4250010003
 Transform:
   m_ObjectHideFlags: 0

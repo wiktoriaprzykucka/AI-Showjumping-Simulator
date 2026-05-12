@@ -1,0 +1,4371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="app-version" content="2.0.4">
+<title>Parkours 2 — 3D Course Designer</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #e8e6df;
+  --rail-bg: #f7f7f8;
+  --rail-edge: #e0e0e0;
+  --rail-muted: #f3f3f4;
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-strong: rgba(255, 255, 255, 0.95);
+  --border: rgba(0, 0, 0, 0.06);
+  --border-bright: rgba(0, 0, 0, 0.12);
+  --accent: #0a9b7e;
+  --accent-soft: rgba(10, 155, 126, 0.10);
+  --accent-glow: 0 0 24px rgba(10, 155, 126, 0.35);
+  --text: rgba(20, 20, 20, 0.95);
+  --text-dim: rgba(20, 20, 20, 0.55);
+  --text-faint: rgba(20, 20, 20, 0.38);
+  --danger: #c0392b;
+  --danger-soft: rgba(192, 57, 43, 0.08);
+  --rail-toggle-w: 30px;
+  --rail-left-expanded: 252px;
+  --rail-right-w: 232px;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  -webkit-user-select: none; user-select: none;
+}
+
+#app { position: fixed; inset: 0; }
+canvas#c {
+  width: 100%; height: 100%; display: block; cursor: crosshair;
+  touch-action: none;
+}
+canvas#c.grab { cursor: grab; }
+canvas#c.grabbing { cursor: grabbing; }
+canvas#c.rotating { cursor: ew-resize; }
+canvas#c.orbiting { cursor: move; }
+
+/* ─── Layout v2 — side rails (full canvas center, dock unchanged) ─── */
+.hidden { display: none !important; }
+
+@keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } }
+@keyframes slideUp   { from { opacity: 0; transform: translate(-50%, 20px); } }
+@keyframes slideRight{ from { opacity: 0; transform: translateX(20px); } }
+@keyframes pulseRing { 0%,100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.08); opacity: 0.9; } }
+@keyframes fadeIn    { from { opacity: 0; } }
+
+.sidebar-brand-row .brand {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 2.5px; text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+}
+.brand-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent);
+}
+
+.sidebar-brand-row .course-name {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--rail-edge);
+  border-radius: 0;
+  color: var(--text);
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 18px; font-weight: 600;
+  letter-spacing: -0.02em;
+  width: 100%;
+  padding: 4px 0 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.sidebar-brand-row .course-name:hover { border-bottom-color: #ccc; }
+.sidebar-brand-row .course-name:focus {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.rail-course-params .params {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+.rail-course-params .chip {
+  width: 100%;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid var(--rail-edge);
+}
+.chip {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid var(--rail-edge);
+  cursor: pointer;
+  transition: border-color 0.15s;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+}
+.chip:hover { border-color: #ccc; }
+.chip-input {
+  background: transparent; border: none; outline: none;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px; font-weight: 600;
+  min-width: 36px; padding: 0;
+  text-align: right;
+}
+.chip-input:focus { color: var(--accent); }
+.chip-input.chip-speed { width: 52px; }
+.chip-input.chip-height { width: 54px; }
+.chip-input.chip-arena { width: 40px; }
+.chip-suf {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px; font-weight: 600;
+  color: rgba(35, 35, 35, 0.78);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.export-btn {
+  background: var(--accent);
+  color: #ffffff;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  box-shadow: none;
+}
+.export-btn:hover { opacity: 0.92; transform: none; box-shadow: none; }
+.export-btn:active { transform: none; }
+
+.export-btn.pdf-muted {
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--rail-edge);
+}
+.export-btn.pdf-muted:hover {
+  background: var(--rail-muted);
+  border-color: #ccc;
+  transform: none;
+  box-shadow: none;
+}
+
+.rail-export-footer .export-btn {
+  width: 100%;
+  display: block;
+  text-align: center;
+}
+
+/* ─── Left sidebar — edge-docked rail (Figma-style, no floating card) ─── */
+.sidebar-left {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  box-sizing: border-box;
+  width: calc(var(--rail-toggle-w) + var(--rail-left-expanded));
+  max-width: 100vw;
+  background: var(--rail-bg);
+  border-right: 1px solid var(--rail-edge);
+  transition: width 0.18s ease;
+}
+.sidebar-left.collapsed {
+  width: var(--rail-toggle-w);
+}
+.sidebar-left.collapsed .sidebar-left-inner {
+  display: none;
+}
+.sidebar-left-toggle {
+  flex: 0 0 var(--rail-toggle-w);
+  width: var(--rail-toggle-w);
+  min-width: var(--rail-toggle-w);
+  border: none;
+  border-right: 1px solid var(--rail-edge);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+  padding: 0;
+}
+.sidebar-left-toggle:hover {
+  background: var(--rail-muted);
+  color: var(--text-dim);
+}
+.sidebar-left-inner {
+  flex: 1;
+  min-width: 0;
+  width: var(--rail-left-expanded);
+  display: flex;
+  flex-direction: column;
+  background: var(--rail-bg);
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.sidebar-brand-row {
+  flex-shrink: 0;
+  padding: 22px 22px 18px;
+  border-bottom: 1px solid var(--rail-edge);
+}
+.sidebar-stats-wrap {
+  flex-shrink: 0;
+  padding: 18px 22px 16px;
+  border-bottom: 1px solid var(--rail-edge);
+}
+.sidebar-stats-wrap .stats {
+  position: static;
+  transform: none;
+  animation: none;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  align-items: stretch;
+}
+.sidebar-stats-wrap .stat-item {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  padding: 14px 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--rail-edge);
+  transition: background 0.12s;
+}
+.sidebar-stats-wrap .stat-item:first-child { padding-top: 2px; }
+.sidebar-stats-wrap .stat-item:last-child {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+.sidebar-stats-wrap .stat-item:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+.sidebar-stats-wrap .stat-btn {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 4px 12px;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+}
+.sidebar-stats-wrap .stat-val { grid-column: 1; grid-row: 1; font-size: 15px; font-weight: 600; }
+.sidebar-stats-wrap .stat-key { grid-column: 1; grid-row: 2; margin-top: 0; letter-spacing: 0.08em; font-size: 9px; }
+.sidebar-stats-wrap .stat-onoff { grid-column: 2; grid-row: 1 / span 2; margin-left: 0; justify-self: end; align-self: center; }
+.sidebar-status {
+  position: static;
+  transform: none;
+  margin: 16px 22px 0;
+  padding: 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  pointer-events: none;
+  animation: none;
+}
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 22px 22px 28px;
+}
+.sidebar-scroll .fei-panel {
+  position: static;
+  width: 100%;
+  max-height: none;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+}
+.sidebar-cam-hint {
+  flex-shrink: 0;
+  padding: 16px 22px 20px;
+  border-top: 1px solid var(--rail-edge);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  color: var(--text-faint);
+  line-height: 1.65;
+  background: var(--rail-muted);
+}
+.sidebar-cam-hint kbd {
+  background: #fff;
+  border: 1px solid var(--rail-edge);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-right: 3px;
+}
+
+/* ─── Right sidebar — edge-docked inspector rail ─── */
+.sidebar-right {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: min(var(--rail-right-w), calc(100vw - 40px));
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: var(--rail-bg);
+  border-left: 1px solid var(--rail-edge);
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.sidebar-right-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 22px 20px 18px;
+}
+.rail-section-title {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 14px;
+}
+.rail-course-params { margin-bottom: 22px; }
+.rail-inspector .info {
+  display: block;
+  position: static;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  animation: none;
+}
+.rail-inspector .info.show { display: block; }
+.rail-export-footer {
+  flex-shrink: 0;
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--rail-edge);
+  background: var(--rail-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ─── Action Dock (bottom) ─────────────────────────────── */
+.dock {
+  position: fixed; bottom: 20px; left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  border: 1px solid var(--rail-edge);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex; gap: 2px;
+  z-index: 50;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  animation: slideUp 0.5s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.dbtn {
+  width: 42px; height: 42px;
+  background: transparent; border: none;
+  border-radius: 9px;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+  position: relative;
+}
+.dbtn:hover { background: rgba(0,0,0,0.04); color: var(--text); }
+.dbtn.active { background: var(--accent-soft); color: var(--accent); }
+.dbtn.active:hover { background: var(--accent-soft); }
+.dbtn.danger:hover { background: var(--danger-soft); color: var(--danger); }
+.dbtn svg { width: 18px; height: 18px; stroke-width: 1.8; }
+.dbtn[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 10px); left: 50%;
+  transform: translateX(-50%);
+  background: var(--glass-strong);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 11px; font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.15s;
+}
+.dbtn:hover::after { opacity: 1; }
+.divider { width: 1px; background: var(--border); margin: 6px 4px; }
+
+/* ─── Status text accent (pill lives in left sidebar as .sidebar-status) ─── */
+.status .accent { color: var(--accent); font-weight: 600; }
+
+/* ─── Inspector (embodied in right rail .rail-inspector) ─── */
+.info {
+  display: block;
+  width: 100%;
+}
+.info.show { display: block; }
+
+.info.inspector-empty .info-num { color: var(--text-dim); }
+.info.inspector-empty .info-section-label,
+.info.inspector-empty .rot-btn {
+  opacity: 0.42;
+}
+.info.inspector-empty .rot-btn {
+  cursor: default;
+  pointer-events: none;
+}
+.info.inspector-empty .del-btn {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.info-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.info-num {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 24px; font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.info-label {
+  font-size: 9px; letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 3px;
+}
+
+.info-row {
+  display: flex; justify-content: space-between;
+  padding: 7px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+.info-row .key { color: var(--text-faint); }
+.info-row .val { color: var(--text); }
+
+.info-section { margin-top: 14px; }
+.info-section-label {
+  font-size: 9px; letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+.rot-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 4px;
+}
+.rot-btn {
+  padding: 7px 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.rot-btn:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+.del-btn {
+  width: 100%;
+  margin-top: 14px;
+  padding: 9px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--danger);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.del-btn:hover { background: var(--danger-soft); border-color: var(--danger); }
+
+/* ─── FEI summary (geometry reset inside .sidebar-scroll .fei-panel) ─── */
+.fei-panel { box-sizing: border-box; }
+.fei-head {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-faint);
+  margin-bottom: 16px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.fei-mini {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 18px;
+}
+.fei-mini button {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--rail-edge);
+  background: #fff;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+.fei-mini button:hover { border-color: #ccc; color: var(--text); }
+.fei-mini button.fei-chip-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.fei-empty {
+  font-size: 12px; font-style: italic;
+  color: var(--text-faint);
+  line-height: 1.55;
+  text-align: center;
+  padding: 28px 12px;
+}
+.fei-card {
+  background: #fff;
+  border: 1px solid var(--rail-edge);
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.fei-card-title {
+  font-size: 9px; letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-family: 'DM Sans', sans-serif;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+.fei-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rail-edge);
+}
+.fei-metric:last-child { border-bottom: none; }
+.fei-k { font-size: 9px; letter-spacing: 1px; color: var(--text-faint); text-transform: uppercase; }
+.fei-v {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px; font-weight: 600;
+  color: var(--text);
+}
+.fei-u { font-size: 11px; color: var(--text-faint); font-weight: 500; margin-left: 6px; }
+.fei-hint { font-size: 9px; font-style: italic; color: var(--text-dim); line-height: 1.35; margin-top: 2px; }
+
+.fei-val-badge {
+  display: inline-flex; align-items: center;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  font-family: 'DM Sans', sans-serif;
+}
+.fei-val-valid { background: rgba(74,222,128,0.22); color: #4ade80; }
+.fei-val-risky { background: rgba(250,204,21,0.18); color: #fbbf24; }
+.fei-val-invalid { background: rgba(248,113,113,0.22); color: #f87171; }
+
+.fei-issue {
+  margin-bottom: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.fei-issue.warn { border-left: 3px solid #eab308; background: rgba(234,179,8,0.08); color: var(--text-dim); }
+.fei-issue.bad { border-left: 3px solid #ef4444; background: rgba(239,68,68,0.1); color: var(--text); }
+.fei-fix { margin-top: 4px; font-size: 10px; opacity: 0.85; }
+.fei-fixed-p { margin: 10px 0 0 0; font-size: 9px; line-height: 1.35; opacity: .75; font-style: italic; color: var(--text-dim); }
+
+.fei-fixall-wrap {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rail-edge);
+}
+.fei-fixall-btn {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: pointer;
+  transition: opacity 0.12s, border-color 0.12s;
+}
+.fei-fixall-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  opacity: 0.92;
+}
+.fei-fixall-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+.fei-fixall-hint {
+  font-size: 10px;
+  color: var(--text-faint);
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
+/* ─── Stats toggles (default row; left sidebar uses .sidebar-stats-wrap overrides) ─── */
+.stats {
+  display: flex;
+  gap: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.stat-item {
+  display: flex; flex-direction: column; gap: 2px;
+  align-items: center;
+  min-width: 56px;
+}
+.stat-btn {
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  margin: 0;
+  cursor: pointer;
+  border-radius: 8px;
+  font: inherit;
+  color: inherit;
+  transition: background 0.15s;
+}
+.stat-btn:hover { background: rgba(255,255,255,0.35); }
+.stat-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stat-btn.stat-off .stat-val,
+.stat-btn.stat-off .stat-key { opacity: 0.45; }
+.stat-btn.stat-off .stat-onoff { background: rgba(0,0,0,0.06); color: var(--text-faint); }
+.stat-val { color: var(--accent); font-weight: 500; font-size: 14px; }
+.stat-key { color: var(--text-faint); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; font-family: 'DM Sans', sans-serif; }
+.stat-onoff {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 2px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(10, 155, 126, 0.18);
+  color: var(--accent);
+}
+
+/* ─── Combination presets (dock: Double + ▾ menu next to hurdle) ─────── */
+.dock-combo-anchor {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.dock-combo-split {
+  display: flex;
+  flex-direction: row;
+  height: 42px;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+.dock-combo-split:hover {
+  background: rgba(255,255,255,0.06);
+}
+.dock-combo-split.active {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.dock-combo-main {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0 8px 0 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  color: var(--text-dim);
+  font-family: 'DM Sans', sans-serif;
+  line-height: 1.1;
+}
+.dock-combo-split:hover .dock-combo-main,
+.dock-combo-split:hover .dock-combo-chevron {
+  color: var(--text);
+}
+.dock-combo-split.active .dock-combo-main,
+.dock-combo-split.active .dock-combo-chevron {
+  color: var(--accent);
+}
+.dock-combo-main .dock-combo-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.dock-combo-main .dock-combo-sub {
+  font-size: 8px;
+  opacity: 0.85;
+}
+.dock-combo-chevron {
+  width: 22px;
+  flex-shrink: 0;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: rgba(0,0,0,0.06);
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dock-combo-chevron:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--accent);
+}
+.dock-combo-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 248px;
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 12px 11px;
+  z-index: 60;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+}
+.dock-combo-popover[hidden] {
+  display: none !important;
+}
+.dock-combo-pop-head {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.dock-combo-cancel {
+  width: 100%;
+  margin-top: 8px;
+  padding: 7px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: var(--text-dim);
+  transition: all 0.12s;
+}
+.dock-combo-cancel:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.combo-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.combo-row.combo-dist {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 0;
+}
+.combo-row-label {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 5px;
+}
+.combo-row button {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.45);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.12s;
+  line-height: 1.25;
+}
+.combo-row button .sub {
+  display: block;
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+.combo-row button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.combo-row button.cp-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.combo-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+.combo-hint strong { color: var(--accent); font-weight: 600; }
+
+/* ─── Onboarding ───────────────────────────────────────── */
+.onboard {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 30;
+  animation: fadeIn 0.8s 0.3s backwards;
+}
+.onboard-title {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 32px; font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.5px;
+  margin-bottom: 10px;
+}
+.onboard-title em { color: var(--accent); font-style: normal; }
+.onboard-sub {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+.onboard-pulse {
+  width: 60px; height: 60px;
+  border: 2px dashed var(--accent);
+  border-radius: 50%;
+  margin: 24px auto 0;
+  animation: pulseRing 2s infinite ease-in-out;
+}
+
+/* ─── Hurdle Labels (3D overlay) ───────────────────────── */
+#labels { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
+.hl {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: var(--glass-strong);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid var(--border-bright);
+  color: var(--text);
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 500;
+  transition: all 0.15s;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+.hl.sel {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: var(--accent-glow);
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+/* ─── Modal ────────────────────────────────────────────── */
+.modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 200; align-items: center; justify-content: center; }
+.modal.open { display: flex; animation: fadeIn 0.2s; }
+.modal-box {
+  background: var(--glass-strong);
+  backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--border-bright);
+  border-radius: 18px;
+  padding: 24px;
+  max-width: 600px; width: 92%;
+  max-height: 85vh; overflow: auto;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+}
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+.modal-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.modal-sub { font-size: 12px; color: var(--text-dim); }
+.modal-close { background: transparent; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; padding: 4px 10px; border-radius: 6px; transition: all 0.15s; }
+.modal-close:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.modal-pre {
+  background: rgba(0,0,0,0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--text-dim);
+  overflow: auto; max-height: 380px;
+  margin: 12px 0;
+}
+.modal-pre .k { color: var(--accent); }
+.modal-pre .s { color: #b46b00; }
+.modal-pre .n { color: #6c4caa; }
+.modal-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mbtn { padding: 9px 16px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+.mbtn.primary { background: var(--accent); color: #ffffff; border: none; font-weight: 700; }
+.mbtn.primary:hover { box-shadow: var(--accent-glow); }
+.mbtn.secondary { background: transparent; border-color: var(--border-bright); color: var(--text-dim); }
+.mbtn.secondary:hover { border-color: var(--text-dim); color: var(--text); }
+.unity-ws-port-label { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; margin: 0 4px; }
+.unity-ws-port-label input {
+  width: 52px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-bright);
+  background: var(--bg-elevated, #1a1f1c); color: var(--text); font-family: ui-monospace, monospace; font-size: 12px;
+}
+.unity-import-hint { flex-basis: 100%; font-size: 11px; min-height: 14px; margin: 2px 0 0; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <canvas id="c"></canvas>
+
+  <aside class="sidebar-left" id="sidebar-left" aria-label="Course overview">
+    <button type="button" class="sidebar-left-toggle" id="sidebar-left-toggle" onclick="toggleSidebarLeft()" title="Collapse panel" aria-expanded="true">◀</button>
+    <div class="sidebar-left-inner">
+      <div class="sidebar-brand-row">
+        <div class="brand"><div class="brand-dot"></div>Parkours</div>
+        <input class="course-name" id="course-name" value="ZO 12" maxlength="64">
+      </div>
+      <div class="sidebar-stats-wrap">
+        <div class="stats" id="stats">
+          <button type="button" class="stat-item stat-btn stat-on" id="stat-btn-path" onclick="toggleOverlayPath()" title="Show or hide the cyan ridden path in the arena">
+            <span class="stat-val" id="stat-dist">0m</span>
+            <span class="stat-key">Path</span>
+            <span class="stat-onoff" id="stat-on-path">On</span>
+          </button>
+          <button type="button" class="stat-item stat-btn stat-on" id="stat-btn-nums" onclick="toggleOverlayNums()" title="Show or hide obstacle number badges">
+            <span class="stat-val" id="stat-nums">—</span>
+            <span class="stat-key">Numbers</span>
+            <span class="stat-onoff" id="stat-on-nums">On</span>
+          </button>
+          <button type="button" class="stat-item stat-btn stat-on" id="stat-btn-eff" onclick="toggleOverlayEff()" title="Show or hide efforts count">
+            <span class="stat-val" id="stat-eff">—</span>
+            <span class="stat-key">Efforts</span>
+            <span class="stat-onoff" id="stat-on-eff">On</span>
+          </button>
+        </div>
+      </div>
+      <div class="status sidebar-status" id="status">Use <strong>Place hurdle</strong> below · then drag hurdles to adjust</div>
+      <div class="sidebar-scroll">
+        <div class="fei-panel" id="fei-panel">
+          <div class="fei-head">Course summary</div>
+          <div class="fei-mini" aria-label="Speed presets">
+            <button type="button" id="chip-sp-indoor" onclick="setSpeedPreset3d(350)">Indoor 350</button>
+            <button type="button" id="chip-sp-out375" onclick="setSpeedPreset3d(375)">Outdoor 375</button>
+            <button type="button" id="chip-sp-out400" onclick="setSpeedPreset3d(400)">Outdoor 400</button>
+            <button type="button" id="chip-sp-custom" onclick="focusSpeedCustom()" class="fei-chip-on">Custom</button>
+          </div>
+          <div id="fei-empty" class="fei-empty">
+            Build a course to calculate FEI metrics.<br/><span style="font-size:10px;opacity:.7">Length follows the smoothed cyan path (Bézier: exit along jump arrows, approach along track).</span>
+          </div>
+          <div id="fei-body" style="display:none">
+            <div class="fei-card" id="fei-card-metrics">
+              <div class="fei-card-title">Course metrics</div>
+              <div class="fei-metric"><span class="fei-k">Speed</span><span><span class="fei-v" id="fei-v-speed"></span><span class="fei-u">m/min</span></span></div>
+              <div class="fei-metric"><span class="fei-k">Course length</span><span><span class="fei-v" id="fei-v-length"></span><span class="fei-u">m</span></span></div>
+              <div class="fei-metric"><span class="fei-k">Time allowed</span><span><span class="fei-v" id="fei-v-ta"></span><span class="fei-u">s</span></span></div>
+              <div class="fei-metric"><span class="fei-k">Time limit</span><span><span class="fei-v" id="fei-v-tl"></span><span class="fei-u">s · 2× allowed</span></span></div>
+              <div class="fei-metric"><span class="fei-k">Obstacle numbers</span><span><span class="fei-v" id="fei-v-obs"></span><span class="fei-u">count</span></span><span class="fei-hint">Combinations share one obstacle number but add efforts.</span></div>
+              <div class="fei-metric"><span class="fei-k">Efforts</span><span><span class="fei-v" id="fei-v-eff"></span><span class="fei-u">jumps</span></span></div>
+              <p class="fei-fixed-p">Time allowed = (length ÷ speed) × 60 s, rounded · Limit = twice that. Length = arc length of smoothed path.</p>
+            </div>
+            <div class="fei-card" id="fei-card-structure">
+              <div class="fei-card-title">Course structure</div>
+              <div class="fei-metric"><span class="fei-k">Singles</span><span class="fei-v" id="fei-v-singles"></span></div>
+              <div class="fei-metric"><span class="fei-k">Doubles</span><span class="fei-v" id="fei-v-doubles"></span></div>
+              <div class="fei-metric"><span class="fei-k">Triples</span><span class="fei-v" id="fei-v-triples"></span></div>
+              <div class="fei-metric"><span class="fei-k">Total numbers</span><span class="fei-v" id="fei-v-tobs"></span></div>
+              <div class="fei-metric"><span class="fei-k">Total efforts</span><span class="fei-v" id="fei-v-teff"></span></div>
+            </div>
+            <div class="fei-card">
+              <div class="fei-card-title">Course validation</div>
+              <div id="fei-val-status" class="fei-val-badge fei-val-valid">Valid</div>
+              <div id="fei-issues"></div>
+              <div id="fei-issues-ok" style="display:none;font-size:11px;color:var(--accent);font-weight:600">✓ Baseline checks passed</div>
+              <div id="fei-fixall-wrap" class="fei-fixall-wrap" hidden>
+                <button type="button" id="fei-fixall-btn" class="fei-fixall-btn" onclick="fixAllCourseValidation()">Fix all (auto)</button>
+                <p class="fei-fixall-hint">Renumbers obstacles in riding order, aligns jump arrows toward the next fence, sets typical combo spacing (~9&nbsp;m), nudges toward safer arena margins, and fixes speed/height when they block validation. Sharp lines or odd layouts may still need manual tweaks.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar-cam-hint" aria-label="Camera controls">
+        <kbd>Right-drag</kbd> orbit · <kbd>Shift-drag</kbd> pan · <kbd>Scroll</kbd> zoom
+      </div>
+    </div>
+  </aside>
+
+  <!-- Onboarding -->
+  <div class="onboard" id="onboard">
+    <div class="onboard-title">Build your <em>course</em></div>
+    <div class="onboard-sub">Use <strong>Hurdle</strong> for singles · <strong>Double</strong> beside it for combinations (▾ = triple &amp; spacing) · <strong>Adjust</strong> to move fences</div>
+    <div class="onboard-pulse"></div>
+  </div>
+
+  <!-- Action dock -->
+  <div class="dock">
+    <button class="dbtn" id="btn-combo" data-tip="Combination (double). Shift+click or Shift+C = triple · C" onclick="toggleCombo(event)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="9" height="9" rx="1.5"/><rect x="12" y="12" width="9" height="9" rx="1.5"/></svg>
+    </button>
+    <button class="dbtn" id="btn-undo" data-tip="Undo · Z" onclick="undoLast()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7l-3 3"/></svg>
+    </button>
+    <button class="dbtn" id="btn-cam" data-tip="Reset view · R" onclick="resetCamera()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg>
+    </button>
+    <div class="divider"></div>
+    <button class="dbtn dock-place active" id="btn-place-adjust" data-tip="Adjust — drag to move fences; arena tap deselects (no new fence)" onclick="setPlaceMode('adjust')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 9l-3 3 3 3M19 15l3-3-3-3"/><path d="M2 12h20"/><path d="M12 5v14"/></svg>
+    </button>
+    <button class="dbtn dock-place" id="btn-place-hurdle" data-tip="Place hurdles — next arena click adds a fence" onclick="setPlaceMode('hurdle')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 17l4-11h8l4 11M10 17l2-11M14 17l-2-11"/></svg>
+    </button>
+    <div class="dock-combo-anchor" id="dock-combo-anchor">
+      <div class="dock-combo-split" id="dock-combo-split" title="Place double (a–b). ▾ for triple &amp; spacing">
+        <button type="button" class="dock-combo-main" id="btn-combo-double" onclick="armComboPresetFromHotbar()" aria-label="Place double combination">
+          <span class="dock-combo-label">Double</span>
+          <span class="dock-combo-sub">a–b</span>
+        </button>
+        <button type="button" class="dock-combo-chevron" id="btn-combo-menu" onclick="toggleDockComboMenu(event)" aria-expanded="false" aria-haspopup="true" aria-controls="dock-combo-popover" title="Triple &amp; spacing between fences">▾</button>
+      </div>
+      <div class="dock-combo-popover" id="dock-combo-popover" hidden role="dialog" aria-label="Combination options">
+        <div class="dock-combo-pop-head">Combination</div>
+        <div class="combo-row combo-type">
+          <button type="button" id="cp-double" onclick="armComboPreset('double')">Double <span class="sub">a–b</span></button>
+          <button type="button" id="cp-triple" onclick="armComboPreset('triple')">Triple <span class="sub">a–b–c</span></button>
+        </div>
+        <div class="combo-row-label">Spacing (center to center)</div>
+        <div class="combo-row combo-dist">
+          <button type="button" id="cp-d-65" data-cpd="6.5" onclick="selectComboSpacing(6.5)">6.5&nbsp;m <span class="sub">tight</span></button>
+          <button type="button" id="cp-d-75" data-cpd="7.5" onclick="selectComboSpacing(7.5)">7.5&nbsp;m <span class="sub">1 stride</span></button>
+          <button type="button" id="cp-d-88" data-cpd="8.8" onclick="selectComboSpacing(8.8)">8.8&nbsp;m <span class="sub">2 strides</span></button>
+          <button type="button" id="cp-d-105" data-cpd="10.5" onclick="selectComboSpacing(10.5)">10.5&nbsp;m <span class="sub">3 strides</span></button>
+        </div>
+        <p class="combo-hint" id="combo-hint">Pick <strong>Double</strong> or <strong>Triple</strong>, spacing, then click the arena once.</p>
+        <button type="button" class="dock-combo-cancel" onclick="setPlaceMode('adjust')">Cancel placement · Esc</button>
+      </div>
+    </div>
+    <button class="dbtn dock-place" id="btn-place-start" data-tip="Place start sensor" onclick="setPlaceMode('start')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="5,17 12,7 19,17 18,17 18,17" stroke-linejoin="round"/><text x="12" y="15" text-anchor="middle" fill="currentColor" font-size="7" stroke="none" font-family="sans-serif">S</text></svg>
+    </button>
+    <button class="dbtn dock-place" id="btn-place-finish" data-tip="Place finish sensor" onclick="setPlaceMode('finish')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="8" width="14" height="10" rx="1"/><path d="M9 17v2h6v-2"/><text x="12" y="15" text-anchor="middle" fill="currentColor" font-size="6" stroke="none" font-family="sans-serif">F</text></svg>
+    </button>
+    <div class="divider"></div>
+    <button class="dbtn danger" id="btn-clear" data-tip="Clear all" onclick="clearAll()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+    </button>
+  </div>
+
+  <aside class="sidebar-right" id="sidebar-right" aria-label="Course parameters and selection">
+    <div class="sidebar-right-body">
+      <div id="rail-course-params" class="rail-course-params">
+        <div class="rail-section-title">Arena &amp; rules</div>
+        <div class="params">
+          <label class="chip" title="Speed"><input class="chip-input chip-speed" type="number" id="p-speed" value="350" oninput="touchSpeedInput()"><span class="chip-suf">m/min</span></label>
+          <label class="chip" title="Obstacle height"><input class="chip-input chip-height" type="number" id="p-height" value="1.40" step="0.05" oninput="refreshFei()"><span class="chip-suf">m</span></label>
+          <label class="chip" title="Arena width × depth">
+            <input class="chip-input chip-arena" type="number" id="aw" value="60" min="10" max="200" onchange="rebuildGround()">
+            <span class="chip-suf">×</span>
+            <input class="chip-input chip-arena" type="number" id="ah" value="40" min="10" max="200" onchange="rebuildGround()">
+            <span class="chip-suf">m</span>
+          </label>
+        </div>
+      </div>
+      <div id="rail-inspector" class="rail-inspector hidden">
+        <div class="info show" id="info">
+          <div class="info-header">
+            <div>
+              <div class="info-label" id="info-label">Selection</div>
+              <div class="info-num" id="info-num">—</div>
+            </div>
+            <div style="text-align:right">
+              <div class="info-label">Order</div>
+              <div style="font-family:'JetBrains Mono';font-size:13px;color:var(--text-dim)" id="info-order">—</div>
+            </div>
+          </div>
+          <div class="info-row"><span class="key">X</span><span class="val" id="info-x">—</span></div>
+          <div class="info-row"><span class="key">Z</span><span class="val" id="info-z">—</span></div>
+          <div class="info-row"><span class="key">Rotation</span><span class="val" id="info-rot">—</span></div>
+          <div class="info-section">
+            <div class="info-section-label">Quick Rotate</div>
+            <div class="rot-grid">
+              <button class="rot-btn" onclick="stepRot(-45)">−45</button>
+              <button class="rot-btn" onclick="stepRot(-15)">−15</button>
+              <button class="rot-btn" onclick="stepRot(15)">+15</button>
+              <button class="rot-btn" onclick="stepRot(45)">+45</button>
+            </div>
+          </div>
+          <button class="del-btn" onclick="delSel()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            Delete &nbsp;<kbd style="background:rgba(255,85,119,0.1);padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono';font-size:10px">Del</kbd>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="rail-export-footer">
+      <button class="export-btn pdf-muted" type="button" onclick="downloadPdfPlan()" title="Course plan PDF (top-down view)">PDF</button>
+      <button class="export-btn" onclick="doExport()">JSON ↗</button>
+    </div>
+  </aside>
+
+  <div id="labels"></div>
+</div>
+
+<!-- Export modal -->
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Course Export</div>
+        <div class="modal-sub">JSON for Unity · PDF course plan (top-down) uses the same metrics as FEI summary</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <pre class="modal-pre" id="modal-pre"></pre>
+    <div class="modal-actions">
+      <button class="mbtn primary" id="copy-btn" onclick="doCopy()">Copy to clipboard</button>
+      <button class="mbtn secondary" onclick="downloadJson()">Download .json</button>
+      <label class="unity-ws-port-label" title="Must match Unity menu Tools → Course Import">WS port <input id="unity-ws-port" type="text" value="8765" size="4" inputmode="numeric" autocomplete="off" onchange="localStorage.setItem('unityImportPort', this.value.trim())"/></label>
+      <button class="mbtn primary" onclick="sendCourseToUnity()" title="Unity Editor: Tools → Course Import → Start WebSocket Server">Send to Unity</button>
+      <button class="mbtn secondary" onclick="downloadPdfPlan()">Download PDF plan</button>
+      <button class="mbtn secondary" onclick="closeModal()">Close</button>
+      <span id="unity-import-hint" class="unity-import-hint"></span>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
+<script>
+/* Sync CDN fallbacks: some networks block one host; avoids blank screen when THREE never loads. */
+if (typeof THREE === 'undefined') {
+  document.write('<scr'+'ipt src="https://unpkg.com/three@0.128.0/build/three.min.js" crossorigin="anonymous"><\/scr'+'ipt>');
+}
+</script>
+<script>
+if (typeof THREE === 'undefined') {
+  document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"><\/scr'+'ipt>');
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" crossorigin="anonymous"></script>
+<script>
+if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+  document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"><\/scr'+'ipt>');
+}
+</script>
+<script>
+function showBootFatal(msg, detail) {
+  try {
+    let el = document.getElementById('boot-fatal');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'boot-fatal';
+      el.setAttribute('role', 'alert');
+      el.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:max(16px,3vw);background:#e8e6df;color:rgba(20,20,20,.95);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-sizing:border-box;line-height:1.5;';
+      el.innerHTML = '<div style="max-width:36rem;width:100%;background:#fff;border:1px solid #ddd;border-radius:12px;padding:1.25rem 1.35rem;box-shadow:0 12px 48px rgba(0,0,0,.12)"><h1 style="margin:0 0 .5rem;font-size:1.15rem;font-weight:700">Parkours can’t start</h1><p id="boot-fatal-msg" style="margin:0 0 .75rem;font-size:.95rem;color:#444"></p><p style="margin:0 0 .35rem;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:#888">Technical detail</p><pre id="boot-fatal-detail" style="margin:0;font-size:.68rem;overflow:auto;max-height:14rem;background:#f7f7f8;padding:.65rem .75rem;border-radius:8px;border:1px solid #eee;white-space:pre-wrap;word-break:break-word"></pre></div>';
+      document.body.appendChild(el);
+    }
+    const m = document.getElementById('boot-fatal-msg');
+    const d = document.getElementById('boot-fatal-detail');
+    if (m) m.textContent = msg || 'Something went wrong.';
+    if (d) d.textContent = detail || '';
+  } catch (e) { console.error(e); }
+}
+
+window.__parkoursBooted = false;
+window.addEventListener('error', function (ev) {
+  if (window.__parkoursBooted) return;
+  if (document.getElementById('boot-fatal')) return;
+  const msg = (ev.error && ev.error.message) ? ev.error.message : ev.message;
+  showBootFatal('The app stopped during startup.', msg || 'Unknown error');
+});
+window.addEventListener('unhandledrejection', function (ev) {
+  if (window.__parkoursBooted) return;
+  if (document.getElementById('boot-fatal')) return;
+  const r = ev.reason;
+  const msg = r && r.message ? r.message : String(r || 'promise rejected');
+  showBootFatal('The app stopped during startup.', msg);
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// State — single source of truth
+// ═══════════════════════════════════════════════════════════════════════
+let hurdles = []; // { id, label, x, z, rotY, comboGroupId?, comboIndex?, comboSpacingM? }
+let startSensor = null; // { x, z, rotY } | null
+let finishSensor = null;
+let selectedId = null;
+let selectedSensor = null; // 'start' | 'finish' | null
+let placeMode = 'adjust'; // 'adjust' | 'hurdle' | 'start' | 'finish' | 'comboPreset'
+let nextNum = 1; // next obstacle number for new fence
+let comboMode = null; // C-key sequential placement: { num, suffix, triple, groupId } | null
+let comboPresetConfig = null; // { type: 'double'|'triple', spacingM } | null
+let comboPresetSpacing = 7.5;
+/** Last Double/Triple choice for the dock chip and main-button arm (persists after cancel). */
+let comboHotbarType = 'double';
+let undoBatchIds = null;
+
+/** ▾ combination menu open state (dock popover). */
+let dockComboMenuOpen = false;
+
+let comboGhostGroup = null;
+let arenaW = 60, arenaH = 40;
+let hoveredId = null;
+let hoveredSensor = null;
+let __idSeq = 0;
+let __cgSeq = 0;
+const newId = () => ++__idSeq;
+const newComboGroupId = () => `cg${++__cgSeq}`;
+
+const ACCENT_HEX = 0x0CF2C2;
+
+// ═══════════════════════════════════════════════════════════════════════
+// Three.js scene
+// ═══════════════════════════════════════════════════════════════════════
+const wrap = document.getElementById('app');
+const canvas = document.getElementById('c');
+
+if (typeof THREE === 'undefined') {
+  showBootFatal(
+    'The 3D engine (Three.js) did not download.',
+    'Often caused by a firewall, school/work network, or ad blocker blocking CDNs. Try: another Wi‑Fi, VPN off, allow jsdelivr.net / unpkg.com / cdnjs, or open the file from a USB copy that worked elsewhere.',
+  );
+  throw new Error('THREE missing');
+}
+if (!wrap || !canvas) {
+  showBootFatal('Page HTML is incomplete.', 'Expected elements #app and #c.');
+  throw new Error('Missing #app or #c');
+}
+
+/** Try several WebGL options — some GPUs fail with antialiasing or power hints. */
+function createMainWebGLRenderer(canvasEl) {
+  const tries = [
+    { antialias: true, powerPreference: 'high-performance', alpha: false },
+    { antialias: true, powerPreference: 'default', alpha: false },
+    { antialias: false, powerPreference: 'default', alpha: false },
+    { antialias: false, powerPreference: 'low-power', alpha: false },
+  ];
+  for (let i = 0; i < tries.length; i++) {
+    try {
+      const r = new THREE.WebGLRenderer(Object.assign({ canvas: canvasEl }, tries[i]));
+      if (r.getContext()) return r;
+      r.dispose();
+    } catch (err) { /* next */ }
+  }
+  return null;
+}
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xebe7dc);
+
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 500);
+const renderer = createMainWebGLRenderer(canvas);
+if (!renderer) {
+  showBootFatal(
+    'WebGL could not start.',
+    'Enable hardware acceleration in your browser settings, update GPU drivers, or try Chrome/Edge instead of an older browser. On laptops, also check that the browser uses the dedicated GPU (Windows graphics settings).',
+  );
+  throw new Error('WebGLRenderer failed');
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+let droneOrthoCam = null;
+let droneRenderer = null;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb0c4a0, 0.7));
+const key = new THREE.DirectionalLight(0xfff5e0, 0.85);
+key.position.set(20, 35, 12);
+key.castShadow = true;
+Object.assign(key.shadow.camera, { near: 1, far: 120, left: -60, right: 60, top: 60, bottom: -60 });
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.bias = -0.0005;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xe8eaff, 0.25);
+rim.position.set(-15, 10, -20);
+scene.add(rim);
+
+const orb = {
+  theta: 0.4, phi: 0.95, r: 60, cx: 0, cz: 0,
+  tTheta: 0.4, tPhi: 0.95, tR: 60, tCx: 0, tCz: 0,
+};
+
+function applyOrb() {
+  camera.position.set(
+    orb.cx + orb.r * Math.sin(orb.phi) * Math.sin(orb.theta),
+    orb.r * Math.cos(orb.phi),
+    orb.cz + orb.r * Math.sin(orb.phi) * Math.cos(orb.theta),
+  );
+  camera.lookAt(orb.cx, 0, orb.cz);
+}
+
+function tickOrb() {
+  const lerp = 0.18;
+  orb.theta += (orb.tTheta - orb.theta) * lerp;
+  orb.phi += (orb.tPhi - orb.phi) * lerp;
+  orb.r += (orb.tR - orb.r) * lerp;
+  orb.cx += (orb.tCx - orb.cx) * lerp;
+  orb.cz += (orb.tCz - orb.cz) * lerp;
+  applyOrb();
+}
+
+function resetCamera() {
+  orb.tTheta = 0.4;
+  orb.tPhi = 0.95;
+  orb.tR = Math.max(50, arenaW * 0.9);
+  orb.tCx = 0;
+  orb.tCz = 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Ground / arena
+// ═══════════════════════════════════════════════════════════════════════
+let gMesh, gGrid, gBorder;
+const gMat = new THREE.MeshStandardMaterial({ color: 0x7fa56e, roughness: 0.95, metalness: 0 });
+
+function rebuildGround() {
+  arenaW = Math.max(10, +document.getElementById('aw').value || 60);
+  arenaH = Math.max(10, +document.getElementById('ah').value || 40);
+  if (gMesh) { scene.remove(gMesh); gMesh.geometry.dispose(); }
+  if (gGrid) { scene.remove(gGrid); }
+  if (gBorder) { scene.remove(gBorder); gBorder.geometry.dispose(); }
+
+  gMesh = new THREE.Mesh(new THREE.PlaneGeometry(arenaW, arenaH), gMat);
+  gMesh.rotation.x = -Math.PI / 2;
+  gMesh.receiveShadow = true;
+  scene.add(gMesh);
+
+  const size = Math.max(arenaW, arenaH);
+  const divs = Math.ceil(size / 5);
+  gGrid = new THREE.GridHelper(size, divs, 0x4a6b48, 0x5a7858);
+  gGrid.position.y = 0.015;
+  const gm = gGrid.material;
+  if (Array.isArray(gm)) {
+    gm.forEach((m) => { if (m) { m.opacity = 0.45; m.transparent = true; } });
+  } else if (gm) {
+    gm.opacity = 0.45;
+    gm.transparent = true;
+  }
+  scene.add(gGrid);
+
+  const hw = arenaW / 2, hh = arenaH / 2;
+  const pts = [
+    new THREE.Vector3(-hw, 0.04, -hh), new THREE.Vector3(hw, 0.04, -hh),
+    new THREE.Vector3(hw, 0.04, hh), new THREE.Vector3(-hw, 0.04, hh),
+    new THREE.Vector3(-hw, 0.04, -hh),
+  ];
+  gBorder = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color: ACCENT_HEX, opacity: 0.45, transparent: true }),
+  );
+  scene.add(gBorder);
+
+  resetCamera();
+  refreshFei();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Hurdle / sensor lookups (clean, no duplicate-id repair)
+// ═══════════════════════════════════════════════════════════════════════
+const hObjs = new Map(); // id → THREE.Group
+const sensorObjs = { start: null, finish: null };
+let pathLine = null;
+let parallelHintsGroup = null;
+
+/** Matched tangents per knot (jump + chords); cubic Bézier spans. Arm length = chord × fraction. */
+const PATH_BEZIER_HANDLE_FRAC = 0.42;
+const PATH_BEZIER_SAMPLES_PER_SEG = 36;
+
+/** Overlay toggles (stats bar). Distance/count metrics stay readable; toggles affect line & badges in-scene / in-panel. */
+let overlayPathVisible = true;
+let overlayNumsVisible = true;
+let overlayEffVisible = true;
+
+function syncOverlayUi() {
+  const bp = document.getElementById('stat-btn-path');
+  const bn = document.getElementById('stat-btn-nums');
+  const be = document.getElementById('stat-btn-eff');
+  const op = document.getElementById('stat-on-path');
+  const on = document.getElementById('stat-on-nums');
+  const oe = document.getElementById('stat-on-eff');
+  if (bp) {
+    bp.classList.toggle('stat-on', overlayPathVisible);
+    bp.classList.toggle('stat-off', !overlayPathVisible);
+  }
+  if (bn) {
+    bn.classList.toggle('stat-on', overlayNumsVisible);
+    bn.classList.toggle('stat-off', !overlayNumsVisible);
+  }
+  if (be) {
+    be.classList.toggle('stat-on', overlayEffVisible);
+    be.classList.toggle('stat-off', !overlayEffVisible);
+  }
+  if (op) op.textContent = overlayPathVisible ? 'On' : 'Off';
+  if (on) on.textContent = overlayNumsVisible ? 'On' : 'Off';
+  if (oe) oe.textContent = overlayEffVisible ? 'On' : 'Off';
+  if (pathLine) pathLine.visible = overlayPathVisible;
+}
+
+function toggleOverlayPath() {
+  overlayPathVisible = !overlayPathVisible;
+  syncOverlayUi();
+}
+
+function toggleOverlayNums() {
+  overlayNumsVisible = !overlayNumsVisible;
+  syncOverlayUi();
+  updateLabels();
+}
+
+function toggleOverlayEff() {
+  overlayEffVisible = !overlayEffVisible;
+  syncOverlayUi();
+  updateStats();
+}
+
+function findHurdleById(id) {
+  if (id == null) return null;
+  return hurdles.find((h) => h.id === id) || null;
+}
+
+function getHurdleObj(id) { return hObjs.get(id); }
+
+/** All legs of a combo (≥2), sorted by comboIndex, or null for a single. */
+function comboMembersOf(h) {
+  if (!h || h.comboGroupId == null) return null;
+  const g = hurdles
+    .filter((x) => x.comboGroupId === h.comboGroupId)
+    .sort((a, b) => (a.comboIndex ?? 0) - (b.comboIndex ?? 0));
+  return g.length >= 2 ? g : null;
+}
+
+/** Course-padding from arena edge (m). */
+const ARENA_PAD = 1.8;
+
+function arenaBoundsX() { return [-arenaW / 2 + ARENA_PAD, arenaW / 2 - ARENA_PAD]; }
+function arenaBoundsZ() { return [-arenaH / 2 + ARENA_PAD, arenaH / 2 - ARENA_PAD]; }
+
+function clampToArena(x, z) {
+  const [xLo, xHi] = arenaBoundsX();
+  const [zLo, zHi] = arenaBoundsZ();
+  return { x: Math.max(xLo, Math.min(xHi, x)), z: Math.max(zLo, Math.min(zHi, z)) };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Combo preview ghost (during preset placement)
+// ═══════════════════════════════════════════════════════════════════════
+const HURDLE_RAIL_HALF = 3.05 * 0.5;
+
+function railAxisFromRotY(rotYDeg) {
+  const v = new THREE.Vector3(1, 0, 0);
+  v.applyEuler(new THREE.Euler(0, THREE.MathUtils.degToRad(rotYDeg), 0));
+  return v.normalize();
+}
+
+function jumpForwardDir(rotYDeg) {
+  const v = new THREE.Vector3(0, 0, -1);
+  v.applyEuler(new THREE.Euler(0, THREE.MathUtils.degToRad(rotYDeg), 0));
+  return v;
+}
+
+/** Unit (x,z) jump / exit direction — same convention as hurdle arrow. */
+function jumpForwardUnitXZ(rotYDeg) {
+  const v = jumpForwardDir(rotYDeg);
+  const len = Math.hypot(v.x, v.z);
+  if (len < 1e-8) return { x: 0, z: -1 };
+  return { x: v.x / len, z: v.z / len };
+}
+
+function closeDockComboMenu() {
+  dockComboMenuOpen = false;
+  const pop = document.getElementById('dock-combo-popover');
+  if (pop) pop.hidden = true;
+  const chev = document.getElementById('btn-combo-menu');
+  if (chev) chev.setAttribute('aria-expanded', 'false');
+}
+
+function toggleDockComboMenu(ev) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  dockComboMenuOpen = !dockComboMenuOpen;
+  const pop = document.getElementById('dock-combo-popover');
+  if (pop) pop.hidden = !dockComboMenuOpen;
+  const chev = document.getElementById('btn-combo-menu');
+  if (chev) chev.setAttribute('aria-expanded', dockComboMenuOpen ? 'true' : 'false');
+  if (dockComboMenuOpen) updateComboPresetPanel();
+}
+
+document.addEventListener('pointerdown', (e) => {
+  const anchor = document.getElementById('dock-combo-anchor');
+  if (!dockComboMenuOpen || !anchor) return;
+  if (!anchor.contains(e.target)) closeDockComboMenu();
+}, true);
+
+function rmComboGhost() {
+  if (!comboGhostGroup) return;
+  scene.remove(comboGhostGroup);
+  comboGhostGroup.traverse((obj) => {
+    if (obj.geometry && obj.geometry.dispose) obj.geometry.dispose();
+  });
+  comboGhostGroup = null;
+}
+
+function updateComboGhost(cx, cy) {
+  rmComboGhost();
+  if (placeMode !== 'comboPreset' || !comboPresetConfig) return;
+  const p = hitGround(cx, cy);
+  if (!p) return;
+  if (Math.abs(p.x) >= arenaW / 2 - 0.5 || Math.abs(p.z) >= arenaH / 2 - 0.5) return;
+  const { type, spacingM } = comboPresetConfig;
+  const count = type === 'triple' ? 3 : 2;
+  const fwd = jumpForwardDir(0);
+  const xs = [];
+  const zs = [];
+  for (let i = 0; i < count; i++) {
+    xs.push(p.x + fwd.x * spacingM * i);
+    zs.push(p.z + fwd.z * spacingM * i);
+  }
+  fitPositionsInArena(xs, zs);
+
+  const g = new THREE.Group();
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: ACCENT_HEX,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+  });
+  for (let i = 0; i < count; i++) {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.55, 36), ringMat.clone());
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(xs[i], 0.06, zs[i]);
+    g.add(ring);
+  }
+  const lineGeom = new THREE.BufferGeometry().setFromPoints(
+    xs.map((x, i) => new THREE.Vector3(x, 0.08, zs[i])),
+  );
+  g.add(new THREE.Line(lineGeom, new THREE.LineBasicMaterial({
+    color: ACCENT_HEX,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false,
+  })));
+  scene.add(g);
+  comboGhostGroup = g;
+}
+
+/** Shift (xs, zs) together so all fit inside arena padding. */
+function fitPositionsInArena(xs, zs) {
+  const [xLo, xHi] = arenaBoundsX();
+  const [zLo, zHi] = arenaBoundsZ();
+  for (let pass = 0; pass < 4; pass++) {
+    const minx = Math.min(...xs);
+    const maxx = Math.max(...xs);
+    const minz = Math.min(...zs);
+    const maxz = Math.max(...zs);
+    let dx = 0, dz = 0;
+    if (minx < xLo) dx = xLo - minx;
+    else if (maxx > xHi) dx = xHi - maxx;
+    if (minz < zLo) dz = zLo - minz;
+    else if (maxz > zHi) dz = zHi - maxz;
+    if (dx === 0 && dz === 0) break;
+    for (let i = 0; i < xs.length; i++) {
+      xs[i] += dx;
+      zs[i] += dz;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Rigid combo transforms (single source of truth - no per-leg clamping)
+// ═══════════════════════════════════════════════════════════════════════
+/** Translate a group of legs by (dx, dz) keeping them rigid; clamp by group bbox. */
+function moveLegsRigid(legs, dx, dz) {
+  const [xLo, xHi] = arenaBoundsX();
+  const [zLo, zHi] = arenaBoundsZ();
+  // Compute bbox after move, then constrain delta so bbox stays inside arena.
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const l of legs) {
+    const x = l.x + dx, z = l.z + dz;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  if (minX < xLo) dx += xLo - minX;
+  if (maxX > xHi) dx += xHi - maxX;
+  if (minZ < zLo) dz += zLo - minZ;
+  if (maxZ > zHi) dz += zHi - maxZ;
+  for (const l of legs) {
+    l.x += dx;
+    l.z += dz;
+    syncTransform(l);
+  }
+}
+
+/** World-space XZ direction (0,0,-1) after hurdle rotY — matches jump arrow / approach axis. */
+function yawDegFromForwardXZ(dx, dz) {
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-8) return null;
+  const fx = dx / len;
+  const fz = dz / len;
+  let deg = THREE.MathUtils.radToDeg(Math.atan2(-fx, -fz));
+  return ((deg % 360) + 360) % 360;
+}
+
+/** Combos stay collinear; yaw follows riding order — A→B, B→C, with B matching A’s direction on a double (no C). */
+function syncComboFacingRotations(legs) {
+  const sorted = legs.slice().sort((a, b) => (a.comboIndex ?? 0) - (b.comboIndex ?? 0));
+  const n = sorted.length;
+  if (n < 2) return;
+
+  const yawAB = yawDegFromForwardXZ(sorted[1].x - sorted[0].x, sorted[1].z - sorted[0].z);
+
+  if (n === 2) {
+    if (yawAB == null) return;
+    sorted[0].rotY = yawAB;
+    sorted[1].rotY = yawAB;
+    syncTransform(sorted[0]);
+    syncTransform(sorted[1]);
+    return;
+  }
+
+  const yawBC = yawDegFromForwardXZ(sorted[2].x - sorted[1].x, sorted[2].z - sorted[1].z);
+  if (yawAB != null) {
+    sorted[0].rotY = yawAB;
+    syncTransform(sorted[0]);
+  }
+  if (yawBC != null) {
+    sorted[1].rotY = yawBC;
+    sorted[2].rotY = yawBC;
+    syncTransform(sorted[1]);
+    syncTransform(sorted[2]);
+  }
+}
+
+/** Rotate legs rigidly around centroid, translate-back if bbox leaves arena; then yaws along A→B→C chain. */
+function rotateLegsRigid(legs, snaps, pivotX, pivotZ, newYawDeg, oldYawDeg) {
+  let deltaDeg = newYawDeg - oldYawDeg;
+  deltaDeg = ((deltaDeg + 540) % 360) - 180;
+  const rad = deltaDeg * Math.PI / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+
+  // Compute post-rotation positions
+  const newPositions = snaps.map((s) => {
+    const rx = s.x - pivotX;
+    const rz = s.z - pivotZ;
+    return {
+      x: rx * cos - rz * sin + pivotX,
+      z: rx * sin + rz * cos + pivotZ,
+    };
+  });
+
+  // Group-bbox clamp via translation (keeps rigid body intact)
+  const [xLo, xHi] = arenaBoundsX();
+  const [zLo, zHi] = arenaBoundsZ();
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const p of newPositions) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.z < minZ) minZ = p.z;
+    if (p.z > maxZ) maxZ = p.z;
+  }
+  let adjX = 0, adjZ = 0;
+  if (minX < xLo) adjX = xLo - minX;
+  else if (maxX > xHi) adjX = xHi - maxX;
+  if (minZ < zLo) adjZ = zLo - minZ;
+  else if (maxZ > zHi) adjZ = zHi - maxZ;
+
+  for (let i = 0; i < legs.length; i++) {
+    legs[i].x = newPositions[i].x + adjX;
+    legs[i].z = newPositions[i].z + adjZ;
+  }
+  syncComboFacingRotations(legs);
+}
+
+/** Programmatic yaw step (rotate-buttons, etc): rigid for combos, in-place for singles. */
+function applyHurdleYaw(h, newYawDeg) {
+  if (!h) return;
+  const group = comboMembersOf(h);
+  if (!group) {
+    h.rotY = ((newYawDeg % 360) + 360) % 360;
+    syncTransform(h);
+    return;
+  }
+  const snaps = group.map((l) => ({ x: l.x, z: l.z }));
+  let cx = 0, cz = 0;
+  for (const s of snaps) { cx += s.x; cz += s.z; }
+  cx /= snaps.length;
+  cz /= snaps.length;
+  rotateLegsRigid(group, snaps, cx, cz, newYawDeg, h.rotY);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Parallelism hints (between consecutive numeric obstacles)
+// ═══════════════════════════════════════════════════════════════════════
+const parallelHintChordMatBase = new THREE.LineDashedMaterial({
+  color: 0xfff1c8, transparent: true, opacity: 0.92,
+  dashSize: 0.34, gapSize: 0.22, depthTest: false,
+});
+const parallelHintRailOkMat = new THREE.LineBasicMaterial({
+  color: 0x5eead4, transparent: true, opacity: 0.92, depthTest: false,
+});
+const parallelHintRailWarnMat = new THREE.LineBasicMaterial({
+  color: 0xfbbf24, transparent: true, opacity: 0.92, depthTest: false,
+});
+
+function rotationParallelismDeg(yawA, yawB) {
+  let d = THREE.MathUtils.euclideanModulo(yawB - yawA, 360);
+  if (d > 180) d -= 360;
+  d = Math.abs(d);
+  return Math.min(d, Math.abs(d - 180));
+}
+
+function clearParallelHints() {
+  if (!parallelHintsGroup) return;
+  scene.remove(parallelHintsGroup);
+  parallelHintsGroup.traverse((obj) => {
+    if (obj.geometry && obj.geometry.dispose) obj.geometry.dispose();
+  });
+  parallelHintsGroup = null;
+}
+
+function updateParallelHints() {
+  clearParallelHints();
+  if (selectedId == null || selectedSensor) return;
+  const idx = hurdles.findIndex((h) => h.id === selectedId);
+  if (idx <= 0) return;
+  const prev = hurdles[idx - 1];
+  const curr = hurdles[idx];
+  const parallelismDeg = rotationParallelismDeg(prev.rotY, curr.rotY);
+  const railMat = parallelismDeg <= 4 ? parallelHintRailOkMat : parallelHintRailWarnMat;
+
+  const yChord = 0.19, yRail = 0.165;
+  const group = new THREE.Group();
+  group.name = 'ParallelHints';
+
+  const chordPts = [
+    new THREE.Vector3(prev.x, yChord, prev.z),
+    new THREE.Vector3(curr.x, yChord, curr.z),
+  ];
+  const chordGeom = new THREE.BufferGeometry().setFromPoints(chordPts);
+  const chordLine = new THREE.Line(chordGeom, parallelHintChordMatBase.clone());
+  chordLine.computeLineDistances();
+  group.add(chordLine);
+
+  function addRailTick(hd, elevation) {
+    const ax = railAxisFromRotY(hd.rotY);
+    const a = new THREE.Vector3(hd.x, elevation, hd.z).addScaledVector(ax, -HURDLE_RAIL_HALF);
+    const b = new THREE.Vector3(hd.x, elevation, hd.z).addScaledVector(ax, HURDLE_RAIL_HALF);
+    const gm = new THREE.BufferGeometry().setFromPoints([a, b]);
+    group.add(new THREE.Line(gm, railMat));
+  }
+  addRailTick(prev, yRail);
+  addRailTick(curr, yRail + 0.01);
+
+  scene.add(group);
+  parallelHintsGroup = group;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Hurdle / sensor meshes
+// ═══════════════════════════════════════════════════════════════════════
+const M = {
+  post:   new THREE.MeshStandardMaterial({ color: 0xfaf3e0, roughness: 0.55, metalness: 0 }),
+  rail:   new THREE.MeshStandardMaterial({ color: 0xe8e0cd, roughness: 0.55, metalness: 0 }),
+  band:   new THREE.MeshStandardMaterial({ color: 0xc94d4d, roughness: 0.5, metalness: 0 }),
+  handle: new THREE.MeshBasicMaterial({ color: ACCENT_HEX, transparent: true, opacity: 0 }),
+  ring:   new THREE.MeshBasicMaterial({ color: ACCENT_HEX, side: THREE.DoubleSide, transparent: true, opacity: 0 }),
+  ringInner: new THREE.MeshBasicMaterial({ color: ACCENT_HEX, side: THREE.DoubleSide, transparent: true, opacity: 0 }),
+  pick:   new THREE.MeshBasicMaterial({ visible: false, depthWrite: false }),
+  hidden: new THREE.MeshBasicMaterial({ visible: false }),
+};
+
+function makeHurdle(h) {
+  const g = new THREE.Group();
+  g.userData = { hid: h.id, type: 'hurdle' };
+
+  const addBox = (mat, w, ht, d, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, ht, d), mat);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    g.add(m);
+    return m;
+  };
+
+  // Posts (white)
+  addBox(M.post, 0.16, 1.5, 0.16, -1.5, 0.75, 0);
+  addBox(M.post, 0.16, 1.5, 0.16, 1.5, 0.75, 0);
+  // Top caps (red)
+  addBox(M.band, 0.18, 0.18, 0.18, -1.5, 1.5, 0);
+  addBox(M.band, 0.18, 0.18, 0.18, 1.5, 1.5, 0);
+
+  // Rails — alternating red/white bands
+  const railLen = 3.05;
+  const bandW = railLen / 5;
+  for (let i = 0; i < 5; i++) {
+    const x = -railLen / 2 + bandW / 2 + i * bandW;
+    addBox(i % 2 === 0 ? M.rail : M.band, bandW * 0.96, 0.12, 0.12, x, 1.35, 0);
+    addBox(i % 2 === 0 ? M.band : M.rail, bandW * 0.96, 0.12, 0.12, x, 0.85, 0);
+  }
+
+  // Filler planks
+  for (let i = -1; i <= 1; i++) addBox(M.post, 0.08, 0.4, 0.08, i * 0.85, 1.1, 0);
+
+  // Wide invisible footing for reliable picking
+  const pickSlab = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.22, 4.5), M.pick);
+  pickSlab.name = 'pickSlab';
+  pickSlab.position.set(0, 0.11, 0);
+  pickSlab.userData.hid = h.id;
+  g.add(pickSlab);
+
+  // Selection ring (ground glow)
+  const ring = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.15, 64), M.ring.clone());
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.05;
+  ring.name = 'ring';
+  g.add(ring);
+
+  const innerRing = new THREE.Mesh(new THREE.RingGeometry(1.0, 2.0, 64), M.ringInner.clone());
+  innerRing.rotation.x = -Math.PI / 2;
+  innerRing.position.y = 0.04;
+  innerRing.name = 'innerRing';
+  g.add(innerRing);
+
+  // ── Rotation handle: BIGGER hit area + visible arrow ──
+  const handleGroup = new THREE.Group();
+  handleGroup.name = 'rotHandle';
+  handleGroup.userData = { hid: h.id, type: 'rotateHandle' };
+
+  const stemMat = M.handle.clone();
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.7, 12), stemMat);
+  stem.position.set(0, 0.12, -1.4);
+  stem.rotation.x = Math.PI / 2;
+  handleGroup.add(stem);
+
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.55, 14), stemMat);
+  head.position.set(0, 0.12, -2.45);
+  head.rotation.x = -Math.PI / 2;
+  handleGroup.add(head);
+
+  // Generous hit area — large enough to be reliably clickable at any camera angle
+  const hitArea = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6, 1.2, 3.4),
+    M.hidden,
+  );
+  hitArea.position.set(0, 0.6, -1.85);
+  hitArea.userData = { hid: h.id, type: 'rotateHandle' };
+  handleGroup.add(hitArea);
+
+  // Extra disc-shaped hit at the tip (for top-down clicks)
+  const tipHit = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.55, 0.55, 1.0, 24),
+    M.hidden,
+  );
+  tipHit.position.set(0, 0.5, -2.5);
+  tipHit.userData = { hid: h.id, type: 'rotateHandle' };
+  handleGroup.add(tipHit);
+
+  g.add(handleGroup);
+
+  g.position.set(h.x, 0, h.z);
+  g.rotation.y = h.rotY * Math.PI / 180;
+  scene.add(g);
+  hObjs.set(h.id, g);
+  g.scale.setScalar(1);
+}
+
+function rmHurdle(id) {
+  const o = hObjs.get(id);
+  if (!o) return;
+  o.traverse((c) => { if (c.geometry && c.geometry.dispose) c.geometry.dispose(); });
+  scene.remove(o);
+  hObjs.delete(id);
+}
+
+function syncTransform(h) {
+  if (!h) return;
+  const o = hObjs.get(h.id);
+  if (!o) return;
+  o.position.set(h.x, 0, h.z);
+  o.rotation.y = h.rotY * Math.PI / 180;
+  updateParallelHints();
+}
+
+function syncSensor(kind) {
+  const data = kind === 'start' ? startSensor : finishSensor;
+  const o = sensorObjs[kind];
+  if (!o || !data) return;
+  o.position.set(data.x, 0, data.z);
+  o.rotation.y = data.rotY * Math.PI / 180;
+}
+
+function makeSensor(kind) {
+  rmSensor(kind);
+  const data = kind === 'start' ? startSensor : finishSensor;
+  if (!data) return;
+  const g = new THREE.Group();
+  const col = kind === 'start' ? 0x2e7d4f : 0xc0392b;
+  const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.5 });
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.6, 12), mat);
+  post.position.set(0, 0.3, 0);
+  post.castShadow = true;
+  g.add(post);
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.06, 32), mat);
+  disc.position.set(0, 0.04, 0);
+  disc.receiveShadow = true;
+  disc.castShadow = true;
+  g.add(disc);
+
+  const pickPad = new THREE.Mesh(new THREE.CylinderGeometry(2.95, 2.95, 0.06, 40), M.pick);
+  pickPad.name = 'sensorPickPad';
+  pickPad.rotation.x = Math.PI / 2;
+  pickPad.position.set(0, 0.065, 0);
+  g.add(pickPad);
+
+  g.userData = { sensorKind: kind, type: 'sensor' };
+
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: ACCENT_HEX, side: THREE.DoubleSide,
+    transparent: true, opacity: 0,
+  });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.1, 48), ringMat.clone());
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.05;
+  ring.name = 'sensorRing';
+  g.add(ring);
+
+  // Sensor rotation handle (bigger too)
+  const handleGroup = new THREE.Group();
+  handleGroup.name = 'sensorRotHandle';
+  handleGroup.userData = { sensorKind: kind, type: 'sensorRotateHandle' };
+  const stemMat = M.handle.clone();
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.3, 10), stemMat);
+  stem.position.set(0, 0.12, -1.05);
+  stem.rotation.x = Math.PI / 2;
+  handleGroup.add(stem);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.45, 12), stemMat);
+  head.position.set(0, 0.12, -1.85);
+  head.rotation.x = -Math.PI / 2;
+  handleGroup.add(head);
+  const hitArea = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 2.4), M.hidden);
+  hitArea.position.set(0, 0.5, -1.4);
+  hitArea.userData = { sensorKind: kind, type: 'sensorRotateHandle' };
+  handleGroup.add(hitArea);
+  g.add(handleGroup);
+
+  g.position.set(data.x, 0, data.z);
+  g.rotation.y = data.rotY * Math.PI / 180;
+  scene.add(g);
+  sensorObjs[kind] = g;
+}
+
+function rmSensor(kind) {
+  const o = sensorObjs[kind];
+  if (!o) return;
+  o.traverse((c) => { if (c.geometry && c.geometry.dispose) c.geometry.dispose(); });
+  scene.remove(o);
+  sensorObjs[kind] = null;
+}
+
+function setSelectionVisuals() {
+  ['start', 'finish'].forEach((k) => {
+    const o = sensorObjs[k];
+    if (!o) return;
+    const r = o.getObjectByName('sensorRing');
+    const handle = o.getObjectByName('sensorRotHandle');
+    const sel = selectedSensor === k;
+    if (r) r.material.opacity = sel ? 0.85 : 0;
+    if (handle) {
+      handle.children.forEach((c) => {
+        if (c.material && c.material.opacity !== undefined && c.material.visible !== false) {
+          c.material.opacity = sel ? 1 : 0;
+        }
+      });
+    }
+  });
+
+  // Combo legs share selection visuals
+  let comboSel = null;
+  if (!selectedSensor && selectedId != null) {
+    const hh0 = findHurdleById(selectedId);
+    const cg = hh0 ? comboMembersOf(hh0) : null;
+    if (cg) comboSel = cg;
+  }
+
+  hObjs.forEach((o, id) => {
+    const r = o.getObjectByName('ring');
+    const ir = o.getObjectByName('innerRing');
+    const handle = o.getObjectByName('rotHandle');
+    const isSel = comboSel
+      ? comboSel.some((m) => m.id === id)
+      : id === selectedId;
+    const isHov = hoveredId === id && !isSel;
+    if (r) r.material.opacity = isSel ? 0.9 : (isHov ? 0.3 : 0);
+    if (ir) ir.material.opacity = isSel ? 0.06 : 0;
+    if (handle) {
+      handle.children.forEach((c) => {
+        if (c.material && c.material.opacity !== undefined && c.material.visible !== false) {
+          c.material.opacity = isSel ? 1 : 0;
+        }
+      });
+    }
+  });
+  updateParallelHints();
+}
+
+function updatePath() {
+  if (pathLine) {
+    scene.remove(pathLine);
+    pathLine.geometry.dispose();
+    pathLine = null;
+  }
+  if (hurdles.length === 0) return;
+  const flat = ridingPathBezierPolyline();
+  if (flat.length < 2) return;
+  const pts = flat.map((p) => new THREE.Vector3(p.x, 0.12, p.z));
+  pathLine = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({
+      color: ACCENT_HEX, opacity: 0.7, transparent: true, linewidth: 2,
+    }),
+  );
+  pathLine.visible = overlayPathVisible;
+  scene.add(pathLine);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Labels (HTML overlay)
+// ═══════════════════════════════════════════════════════════════════════
+const lblsEl = document.getElementById('labels');
+const lblMap = new Map();
+
+function mkLabel(h) {
+  const d = document.createElement('div');
+  d.className = 'hl';
+  d.textContent = h.label;
+  d.dataset.id = h.id;
+  lblsEl.appendChild(d);
+  lblMap.set(h.id, d);
+}
+
+function rmLabel(id) {
+  const d = lblMap.get(id);
+  if (!d) return;
+  lblsEl.removeChild(d);
+  lblMap.delete(id);
+}
+
+function updateLabels() {
+  if (!overlayNumsVisible) {
+    lblMap.forEach((d) => { d.style.display = 'none'; });
+    return;
+  }
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  let labelCombo = null;
+  if (!selectedSensor && selectedId != null) {
+    const hd = findHurdleById(selectedId);
+    if (hd) labelCombo = comboMembersOf(hd);
+  }
+  lblMap.forEach((d, id) => {
+    const o = hObjs.get(id);
+    if (!o) return;
+    const p = new THREE.Vector3(o.position.x, 2.4, o.position.z);
+    p.project(camera);
+    const sx = (p.x * 0.5 + 0.5) * w;
+    const sy = (-p.y * 0.5 + 0.5) * h;
+    d.style.left = sx + 'px';
+    d.style.top = sy + 'px';
+    d.style.display = (p.z < 1 && sx > -50 && sx < w + 50 && sy > -50 && sy < h + 50) ? 'flex' : 'none';
+    const isLblSel = labelCombo
+      ? labelCombo.some((m) => m.id === id)
+      : id === selectedId;
+    d.classList.toggle('sel', isLblSel);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Raycasting
+// ═══════════════════════════════════════════════════════════════════════
+const rc = new THREE.Raycaster();
+const mv = new THREE.Vector2();
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+function setMouse(cx, cy) {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  mv.set((cx / w) * 2 - 1, -(cy / h) * 2 + 1);
+  rc.setFromCamera(mv, camera);
+}
+
+function hitGround(cx, cy) {
+  setMouse(cx, cy);
+  const t = new THREE.Vector3();
+  return rc.ray.intersectPlane(groundPlane, t) ? t : null;
+}
+
+/** Returns { type, hid? | kind? } | null. Priorities:
+ *  1. Selected sensor's rotation handle
+ *  2. Selected hurdle (or combo group's) rotation handle
+ *  3. Sensor body
+ *  4. Hurdle body
+ */
+function hitScene(cx, cy) {
+  setMouse(cx, cy);
+
+  if (selectedSensor) {
+    const og = sensorObjs[selectedSensor];
+    if (og) {
+      const handle = og.getObjectByName('sensorRotHandle');
+      if (handle) {
+        const meshes = [];
+        handle.traverse((c) => { if (c.isMesh) meshes.push(c); });
+        const rh = rc.intersectObjects(meshes, false);
+        if (rh.length) return { type: 'sensorRotateHandle', kind: selectedSensor };
+      }
+    }
+  }
+
+  if (selectedId != null) {
+    const hh0 = findHurdleById(selectedId);
+    const combo = hh0 ? comboMembersOf(hh0) : null;
+    const tryIds = combo ? combo.map((x) => x.id) : (hh0 ? [hh0.id] : []);
+    let bestDist = Infinity;
+    let bestHid = null;
+    for (const tid of tryIds) {
+      const sel = hObjs.get(tid);
+      if (!sel) continue;
+      const handle = sel.getObjectByName('rotHandle');
+      if (!handle) continue;
+      const meshes = [];
+      handle.traverse((c) => { if (c.isMesh) meshes.push(c); });
+      const rh = rc.intersectObjects(meshes, false);
+      if (rh.length && rh[0].distance < bestDist) {
+        bestDist = rh[0].distance;
+        bestHid = tid;
+      }
+    }
+    if (bestHid != null) return { type: 'rotateHandle', hid: bestHid };
+  }
+
+  // Sensors
+  let bestSens = null, bestSensDist = Infinity;
+  ['start', 'finish'].forEach((k) => {
+    const g = sensorObjs[k];
+    if (!g) return;
+    const meshes = [];
+    g.children.forEach((c) => {
+      if (c.name === 'sensorRotHandle') return;
+      c.traverse((ch) => { if (ch.isMesh) meshes.push(ch); });
+    });
+    const sh = rc.intersectObjects(meshes, false);
+    if (sh.length && sh[0].distance < bestSensDist) {
+      bestSensDist = sh[0].distance;
+      bestSens = k;
+    }
+  });
+
+  // Hurdles
+  const hMeshes = [];
+  hObjs.forEach((o) => {
+    o.children.forEach((c) => {
+      if (c.name === 'rotHandle') return;
+      c.traverse((child) => { if (child.isMesh) hMeshes.push(child); });
+    });
+  });
+  const hHit = rc.intersectObjects(hMeshes, false);
+  if (hHit.length && bestSens !== null) {
+    if (bestSensDist + 0.35 < hHit[0].distance) return { type: 'sensor', kind: bestSens };
+  }
+  if (hHit.length) {
+    let cur = hHit[0].object;
+    while (cur && !cur.userData.hid) cur = cur.parent;
+    if (cur && cur.userData.hid != null) return { type: 'hurdle', hid: cur.userData.hid };
+  }
+  if (bestSens !== null) return { type: 'sensor', kind: bestSens };
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Input handling
+// ═══════════════════════════════════════════════════════════════════════
+const ms = {
+  down: false, sx: 0, sy: 0, cx: 0, cy: 0, btn: 0, drag: false, shift: false,
+  mode: null, // 'orbit' | 'pan' | 'move' | 'rotate' | 'moveSensor' | 'rotateSensor'
+  hid: null,
+  sensorKind: null,
+  // rotation drag state
+  rotStartRot: 0,
+  rotAccRad: 0,
+  rotLastAngle: 0,
+  rotSnap: null, // [{x,z}, ...] for combo legs (or single)
+  rotLegs: null, // hurdle objs being rotated
+  rotPivotX: 0, rotPivotZ: 0,
+  // delayed-pick from empty-ground click while something is selected
+  pendingGroundGrab: null,
+  downPick: null,
+};
+
+let lastCanvasXY = [0, 0];
+
+function gcp(e) {
+  const r = wrap.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+}
+
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+canvas.addEventListener('pointerdown', (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  const [x, y] = gcp(e);
+  ms.down = true;
+  ms.sx = ms.cx = x;
+  ms.sy = ms.cy = y;
+  ms.btn = e.button;
+  ms.drag = false;
+  ms.shift = e.shiftKey;
+  ms.mode = null;
+  ms.hid = null;
+  ms.downPick = null;
+  ms.pendingGroundGrab = null;
+
+  // Right click = orbit (shift = pan)
+  if (e.button === 2) {
+    ms.mode = e.shiftKey ? 'pan' : 'orbit';
+    canvas.classList.add(e.shiftKey ? 'grabbing' : 'orbiting');
+    return;
+  }
+  // Middle or shift+left = pan
+  if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+    ms.mode = 'pan';
+    canvas.classList.add('grabbing');
+    return;
+  }
+
+  const h = hitScene(x, y);
+
+  if (h && h.type === 'sensorRotateHandle') {
+    const obj = sensorObjs[h.kind];
+    const groundHit = hitGround(x, y);
+    const data = h.kind === 'start' ? startSensor : finishSensor;
+    if (groundHit && obj && data) {
+      ms.mode = 'rotateSensor';
+      ms.sensorKind = h.kind;
+      ms.downPick = { type: 'sensor', kind: h.kind };
+      const a0 = Math.atan2(groundHit.x - obj.position.x, groundHit.z - obj.position.z);
+      ms.rotLastAngle = a0;
+      ms.rotAccRad = 0;
+      ms.rotStartRot = data.rotY;
+      ms.drag = true;
+      canvas.classList.add('rotating');
+    }
+    return;
+  }
+
+  if (h && h.type === 'rotateHandle') {
+    const hd = findHurdleById(h.hid);
+    const groundHit = hitGround(x, y);
+    if (groundHit && hd) {
+      const grp = comboMembersOf(hd) || [hd];
+      let pcx = 0, pcz = 0;
+      for (const l of grp) { pcx += l.x; pcz += l.z; }
+      pcx /= grp.length;
+      pcz /= grp.length;
+      ms.rotPivotX = pcx;
+      ms.rotPivotZ = pcz;
+      ms.rotSnap = grp.map((l) => ({ x: l.x, z: l.z }));
+      ms.rotLegs = grp.slice();
+      // All legs of a rigid combo share yaw — use clicked leg's yaw as the start.
+      ms.rotStartRot = hd.rotY;
+      ms.mode = 'rotate';
+      ms.hid = hd.id;
+      ms.downPick = { type: 'hurdle', id: hd.id };
+      const a0 = Math.atan2(groundHit.x - pcx, groundHit.z - pcz);
+      ms.rotLastAngle = a0;
+      ms.rotAccRad = 0;
+      ms.drag = true;
+      canvas.classList.add('rotating');
+    }
+    return;
+  }
+
+  if (h && h.type === 'sensor') {
+    if (selectedSensor !== h.kind) setSelSensor(h.kind);
+    ms.mode = 'moveSensor';
+    ms.sensorKind = h.kind;
+    ms.downPick = { type: 'sensor', kind: h.kind };
+    canvas.classList.add('grabbing');
+    return;
+  }
+
+  if (h && h.type === 'hurdle') {
+    setSel(h.hid);
+    ms.mode = 'move';
+    ms.hid = h.hid;
+    ms.downPick = { type: 'hurdle', id: h.hid };
+    canvas.classList.add('grabbing');
+    return;
+  }
+
+  // Empty arena click while something is selected: prep for drag-move
+  if (placeMode === 'adjust') {
+    const gp = hitGround(x, y);
+    if (gp && Math.abs(gp.x) < arenaW / 2 - 1 && Math.abs(gp.z) < arenaH / 2 - 1) {
+      if (selectedId != null && !selectedSensor) {
+        ms.pendingGroundGrab = { kind: 'hurdle', id: selectedId };
+        ms.downPick = { type: 'hurdle', id: selectedId };
+      } else if (selectedSensor === 'start' && startSensor) {
+        ms.pendingGroundGrab = { kind: 'sensor', which: 'start' };
+        ms.downPick = { type: 'sensor', kind: 'start' };
+      } else if (selectedSensor === 'finish' && finishSensor) {
+        ms.pendingGroundGrab = { kind: 'sensor', which: 'finish' };
+        ms.downPick = { type: 'sensor', kind: 'finish' };
+      }
+    }
+  }
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  const [x, y] = gcp(e);
+
+  if (!ms.down) {
+    lastCanvasXY[0] = x;
+    lastCanvasXY[1] = y;
+    const h = hitScene(x, y);
+    const newHov = h && h.type === 'hurdle' ? h.hid : null;
+    const newSensHov = h && h.type === 'sensor' ? h.kind : null;
+    const changed = newHov !== hoveredId || newSensHov !== hoveredSensor;
+    hoveredId = newHov;
+    hoveredSensor = newSensHov;
+    if (changed) {
+      ['start', 'finish'].forEach((k) => {
+        const o = sensorObjs[k];
+        if (!o) return;
+        const r = o.getObjectByName('sensorRing');
+        const sel = selectedSensor === k;
+        const hov = hoveredSensor === k && !sel;
+        if (r) r.material.opacity = sel ? 0.85 : (hov ? 0.3 : 0);
+      });
+      setSelectionVisuals();
+      canvas.classList.toggle('grab', !!(hoveredId != null || hoveredSensor) && selectedId == null && !selectedSensor);
+    }
+    if (placeMode === 'comboPreset' && comboPresetConfig) updateComboGhost(x, y);
+    return;
+  }
+
+  const dx = x - ms.cx;
+  const dy = y - ms.cy;
+  ms.cx = x;
+  ms.cy = y;
+  if (Math.abs(x - ms.sx) > 4 || Math.abs(y - ms.sy) > 4) ms.drag = true;
+  if (!ms.drag) return;
+
+  // Late-bind drag mode for empty-ground grabs
+  if (!ms.mode && ms.pendingGroundGrab) {
+    if (ms.pendingGroundGrab.kind === 'hurdle') {
+      ms.mode = 'move';
+      ms.hid = ms.pendingGroundGrab.id;
+      canvas.classList.add('grabbing');
+    } else if (ms.pendingGroundGrab.kind === 'sensor') {
+      ms.mode = 'moveSensor';
+      ms.sensorKind = ms.pendingGroundGrab.which;
+      canvas.classList.add('grabbing');
+    }
+  }
+
+  if (ms.mode === 'orbit') {
+    orb.tTheta -= dx * 0.008;
+    orb.tPhi = Math.max(0.18, Math.min(1.45, orb.tPhi - dy * 0.008));
+  } else if (ms.mode === 'pan') {
+    const f = orb.r * 0.0018;
+    const fwd = new THREE.Vector3(Math.sin(orb.theta), 0, Math.cos(orb.theta));
+    const rgt = new THREE.Vector3(Math.cos(orb.theta), 0, -Math.sin(orb.theta));
+    const pdx = -dx;
+    const pdy = -dy;
+    orb.tCx -= rgt.x * pdx * f * 6 - fwd.x * pdy * f * 6;
+    orb.tCz -= rgt.z * pdx * f * 6 - fwd.z * pdy * f * 6;
+  } else if (ms.mode === 'move') {
+    const p = hitGround(x, y);
+    if (p) {
+      const h = findHurdleById(ms.hid);
+      if (h) {
+        const target = clampToArena(p.x, p.z);
+        const dlx = target.x - h.x;
+        const dlz = target.z - h.z;
+        const grp = comboMembersOf(h);
+        if (grp) {
+          moveLegsRigid(grp, dlx, dlz);
+        } else {
+          h.x = target.x;
+          h.z = target.z;
+          syncTransform(h);
+        }
+        updatePath();
+        updateInfoPanel();
+        refreshFei();
+      }
+    }
+  } else if (ms.mode === 'rotate') {
+    const p = hitGround(x, y);
+    if (p && ms.rotSnap && ms.rotLegs && ms.rotSnap.length === ms.rotLegs.length) {
+      const angle = Math.atan2(p.x - ms.rotPivotX, p.z - ms.rotPivotZ);
+      let d = angle - ms.rotLastAngle;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      ms.rotAccRad += d;
+      ms.rotLastAngle = angle;
+      // Clockwise-from-above: negate the integrated atan2 delta vs. three's +Y (CCW-positive rotY).
+      const deltaDeg = -(ms.rotAccRad * 180 / Math.PI);
+      const newYaw = ms.rotStartRot + deltaDeg;
+      rotateLegsRigid(ms.rotLegs, ms.rotSnap, ms.rotPivotX, ms.rotPivotZ, newYaw, ms.rotStartRot);
+      updatePath();
+      updateInfoPanel();
+      refreshFei();
+    }
+  } else if (ms.mode === 'moveSensor') {
+    const p = hitGround(x, y);
+    if (p && ms.sensorKind && (startSensor || finishSensor)) {
+      const target = clampToArena(p.x, p.z);
+      if (ms.sensorKind === 'start' && startSensor) {
+        startSensor.x = target.x;
+        startSensor.z = target.z;
+      } else if (ms.sensorKind === 'finish' && finishSensor) {
+        finishSensor.x = target.x;
+        finishSensor.z = target.z;
+      }
+      syncSensor(ms.sensorKind);
+      updatePath();
+      updateInfoPanel();
+      refreshFei();
+    }
+  } else if (ms.mode === 'rotateSensor') {
+    const obj = sensorObjs[ms.sensorKind];
+    const p = hitGround(x, y);
+    const data = ms.sensorKind === 'start' ? startSensor : finishSensor;
+    if (p && obj && data) {
+      const angle = Math.atan2(p.x - obj.position.x, p.z - obj.position.z);
+      let d = angle - ms.rotLastAngle;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      ms.rotAccRad += d;
+      ms.rotLastAngle = angle;
+      const delta = -(ms.rotAccRad * 180 / Math.PI);
+      data.rotY = ((ms.rotStartRot + delta) % 360 + 360) % 360;
+      syncSensor(ms.sensorKind);
+      updatePath();
+      refreshFei();
+      updateInfoPanel();
+    }
+  }
+});
+
+canvas.addEventListener('pointerup', (e) => {
+  canvas.releasePointerCapture(e.pointerId);
+  canvas.classList.remove('grabbing', 'orbiting', 'rotating');
+
+  if (!ms.drag && ms.btn === 0) {
+    if (placeMode === 'adjust' && ms.pendingGroundGrab) {
+      // Empty-ground click with selection — clear selection
+      ms.pendingGroundGrab = null;
+      ms.downPick = null;
+      setSel(null);
+      setSelSensor(null);
+    } else {
+      const [x, y] = gcp(e);
+      const h = hitScene(x, y);
+      const keepPick =
+        (ms.downPick?.type === 'hurdle' && ms.downPick.id === selectedId) ||
+        (ms.downPick?.type === 'sensor' && ms.downPick.kind === selectedSensor);
+      if (!h) {
+        const p = hitGround(x, y);
+        if (p && Math.abs(p.x) < arenaW / 2 - 1 && Math.abs(p.z) < arenaH / 2 - 1) {
+          if (placeMode === 'start') placeSensorAt('start', p.x, p.z);
+          else if (placeMode === 'finish') placeSensorAt('finish', p.x, p.z);
+          else if (placeMode === 'comboPreset') placeComboPresetAt(p.x, p.z);
+          else if (placeMode === 'hurdle') placeHurdle(p.x, p.z);
+          else if (!keepPick) {
+            setSel(null);
+            setSelSensor(null);
+          }
+        } else if (!keepPick) {
+          setSel(null);
+          setSelSensor(null);
+        }
+      } else if (h.type === 'hurdle') {
+        setSel(h.hid);
+      } else if (h.type === 'sensor') {
+        setSelSensor(h.kind);
+      }
+    }
+  }
+
+  ms.pendingGroundGrab = null;
+  ms.down = false;
+  ms.mode = null;
+  ms.hid = null;
+  ms.sensorKind = null;
+  ms.downPick = null;
+  ms.rotSnap = null;
+  ms.rotLegs = null;
+  ms.rotAccRad = 0;
+});
+
+canvas.addEventListener('pointerleave', () => {
+  rmComboGhost();
+});
+
+canvas.addEventListener('pointercancel', () => {
+  canvas.classList.remove('grabbing', 'orbiting', 'rotating');
+  ms.down = false;
+  ms.mode = null;
+  ms.hid = null;
+  ms.sensorKind = null;
+  ms.downPick = null;
+  ms.pendingGroundGrab = null;
+  ms.drag = false;
+  ms.rotSnap = null;
+  ms.rotLegs = null;
+  ms.rotAccRad = 0;
+});
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  orb.tR = Math.max(15, Math.min(180, orb.tR * (1 + e.deltaY * 0.0015)));
+}, { passive: false });
+
+window.addEventListener('keydown', (e) => {
+  const tgt = e.target;
+  if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA')) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (selectedId != null || selectedSensor) {
+      e.preventDefault();
+      delSel();
+    }
+  } else if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) {
+    if (e.repeat) return;
+    e.preventDefault();
+    undoLast();
+  } else if (e.key === 'Escape') {
+    ms.pendingGroundGrab = null;
+    closeDockComboMenu();
+    if (placeMode === 'comboPreset') setPlaceMode('adjust');
+    setSel(null);
+    setSelSensor(null);
+  } else if (e.key.toLowerCase() === 'c') {
+    e.preventDefault();
+    toggleCombo(e);
+  } else if (e.key.toLowerCase() === 'r') {
+    resetCamera();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Hurdle management — placement, deletion, combos
+// ═══════════════════════════════════════════════════════════════════════
+function placeComboPresetAt(wx, wz) {
+  if (!comboPresetConfig) return;
+  const { type, spacingM } = comboPresetConfig;
+  const count = type === 'triple' ? 3 : 2;
+  recomputeNextNumFromHurdles();
+  const num = nextNum;
+  const rotY = 0;
+  const fwd = jumpForwardDir(rotY);
+  const xs = [];
+  const zs = [];
+  for (let i = 0; i < count; i++) {
+    xs.push(wx + fwd.x * spacingM * i);
+    zs.push(wz + fwd.z * spacingM * i);
+  }
+  fitPositionsInArena(xs, zs);
+
+  const gid = newComboGroupId();
+  const suffixes = ['a', 'b', 'c'];
+  const placedIds = [];
+  for (let i = 0; i < count; i++) {
+    const h = {
+      id: newId(),
+      label: `${num}${suffixes[i]}`,
+      x: xs[i],
+      z: zs[i],
+      rotY,
+      comboGroupId: gid,
+      comboIndex: i,
+      comboSpacingM: spacingM,
+    };
+    hurdles.push(h);
+    makeHurdle(h);
+    mkLabel(h);
+    placedIds.push(h.id);
+  }
+  const placed = placedIds.map((id) => findHurdleById(id)).filter(Boolean);
+  if (placed.length >= 2) syncComboFacingRotations(placed);
+  undoBatchIds = placedIds.slice();
+  recomputeNextNumFromHurdles();
+  comboMode = null;
+  updateComboBtn();
+  rmComboGhost();
+  updatePath();
+  setSel(placedIds[placedIds.length - 1]);
+  refreshFei();
+  updateStatus();
+  hideOnboard();
+  setPlaceMode('adjust');
+}
+
+function armComboPreset(type) {
+  comboHotbarType = type === 'triple' ? 'triple' : 'double';
+  comboMode = null;
+  updateComboBtn();
+  comboPresetSpacing = comboPresetSpacing || 7.5;
+  comboPresetConfig = { type, spacingM: comboPresetSpacing };
+  recomputeNextNumFromHurdles();
+  setPlaceMode('comboPreset');
+  closeDockComboMenu();
+  updateComboGhost(lastCanvasXY[0], lastCanvasXY[1]);
+}
+
+function updateDockComboHotbarLabels() {
+  const mainBtn = document.querySelector('.dock-combo-main');
+  const labelEl = mainBtn?.querySelector('.dock-combo-label');
+  const subEl = mainBtn?.querySelector('.dock-combo-sub');
+  const split = document.getElementById('dock-combo-split');
+  if (!labelEl || !subEl || !split || !mainBtn) return;
+  const triple = comboHotbarType === 'triple';
+  labelEl.textContent = triple ? 'Triple' : 'Double';
+  subEl.textContent = triple ? 'a–b–c' : 'a–b';
+  split.title = triple
+    ? 'Place triple (a–b–c). ▾ for spacing & double/triple'
+    : 'Place double (a–b). ▾ for triple & spacing';
+  mainBtn.setAttribute('aria-label', triple ? 'Place triple combination' : 'Place double combination');
+}
+
+/** Arm the combination type currently shown on the dock (Double or Triple). */
+function armComboPresetFromHotbar() {
+  armComboPreset(comboHotbarType);
+}
+
+function selectComboSpacing(m) {
+  comboPresetSpacing = m;
+  if (comboPresetConfig) comboPresetConfig.spacingM = m;
+  updateComboPresetPanel();
+  if (placeMode === 'comboPreset' && comboPresetConfig) {
+    updateComboGhost(lastCanvasXY[0], lastCanvasXY[1]);
+  }
+}
+
+function updateComboPresetPanel() {
+  const dbl = document.getElementById('cp-double');
+  const tpl = document.getElementById('cp-triple');
+  const armedDouble = comboPresetConfig && comboPresetConfig.type === 'double';
+  const armedTriple = comboPresetConfig && comboPresetConfig.type === 'triple';
+  if (dbl) dbl.classList.toggle('cp-on', armedDouble || (!comboPresetConfig && comboHotbarType === 'double'));
+  if (tpl) tpl.classList.toggle('cp-on', armedTriple || (!comboPresetConfig && comboHotbarType === 'triple'));
+  [6.5, 7.5, 8.8, 10.5].forEach((v) => {
+    const el = document.querySelector(`[data-cpd="${v}"]`);
+    if (el) el.classList.toggle('cp-on', Math.abs(comboPresetSpacing - v) < 0.05);
+  });
+  updateDockComboHotbarLabels();
+  const hint = document.getElementById('combo-hint');
+  if (!hint) return;
+  if (placeMode === 'comboPreset' && comboPresetConfig) {
+    const last = comboPresetConfig.type === 'triple' ? 'c' : 'b';
+    hint.innerHTML = `Click the arena to place <strong>${nextNum}a–${nextNum}${last}</strong> (${comboPresetConfig.spacingM}&nbsp;m between centers). <span style="opacity:.85">Esc cancels.</span>`;
+  } else {
+    hint.innerHTML = 'Pick <strong>Double</strong> or <strong>Triple</strong>, choose spacing, then click the arena once.';
+  }
+}
+
+function placeHurdle(wx, wz) {
+  undoBatchIds = null;
+  const target = clampToArena(wx, wz);
+  let label;
+  let comboMeta = null;
+  let comboJustFinished = false;
+  if (comboMode) {
+    label = comboMode.num + comboMode.suffix;
+    const triple = !!comboMode.triple;
+    // Reuse the same group id across all legs of one C-key combo
+    if (comboMode.suffix === 'a' && !comboMode.groupId) {
+      comboMode.groupId = newComboGroupId();
+    }
+    const cgi = comboMode.groupId;
+    const idx = { a: 0, b: 1, c: 2 }[comboMode.suffix] ?? 0;
+    comboMeta = { comboGroupId: cgi, comboIndex: idx };
+
+    if (comboMode.suffix === 'a') {
+      comboMode = { num: comboMode.num, suffix: 'b', triple, groupId: cgi };
+    } else if (comboMode.suffix === 'b') {
+      if (triple) {
+        comboMode = { num: comboMode.num, suffix: 'c', triple, groupId: cgi };
+      } else {
+        comboMode = null;
+        comboJustFinished = true;
+      }
+    } else {
+      comboMode = null;
+      comboJustFinished = true;
+    }
+    updateComboBtn();
+  } else {
+    recomputeNextNumFromHurdles();
+    label = `${nextNum}`;
+  }
+  const h = { id: newId(), label, x: target.x, z: target.z, rotY: 0 };
+  if (comboMeta) Object.assign(h, comboMeta);
+  hurdles.push(h);
+  makeHurdle(h);
+  mkLabel(h);
+  const grpFacing = comboMembersOf(h);
+  if (grpFacing) syncComboFacingRotations(grpFacing);
+  updatePath();
+  setSel(h.id);
+  refreshFei();
+  updateStatus();
+  hideOnboard();
+  if (comboJustFinished) {
+    recomputeNextNumFromHurdles();
+  } else if (!comboMode) {
+    nextNum++;
+  }
+  if (!comboMode) setPlaceMode('adjust');
+}
+
+function placeSensorAt(kind, wx, wz) {
+  undoBatchIds = null;
+  const target = clampToArena(wx, wz);
+  if (kind === 'start') {
+    startSensor = { x: target.x, z: target.z, rotY: startSensor ? startSensor.rotY : 0 };
+    makeSensor('start');
+  } else {
+    finishSensor = { x: target.x, z: target.z, rotY: finishSensor ? finishSensor.rotY : 0 };
+    makeSensor('finish');
+  }
+  updatePath();
+  setSelSensor(kind);
+  refreshFei();
+  updateStatus();
+  hideOnboard();
+  setPlaceMode('adjust');
+}
+
+function setSel(id) {
+  selectedId = id != null ? id : null;
+  selectedSensor = null;
+  setSelectionVisuals();
+  updateInfoPanel();
+  updateStatus();
+}
+
+function setSelSensor(kind) {
+  selectedSensor = kind;
+  if (kind != null) selectedId = null;
+  setSelectionVisuals();
+  updateInfoPanel();
+  updateStatus();
+}
+
+function setPlaceMode(mode) {
+  placeMode = mode;
+  if (comboMode && mode !== 'hurdle') {
+    comboMode = null;
+    updateComboBtn();
+  }
+  if (mode !== 'comboPreset') {
+    comboPresetConfig = null;
+    rmComboGhost();
+    closeDockComboMenu();
+  }
+  if (mode === 'hurdle' && !comboMode) {
+    recomputeNextNumFromHurdles();
+  }
+  document.getElementById('btn-place-adjust').classList.toggle('active', mode === 'adjust');
+  document.getElementById('btn-place-hurdle').classList.toggle('active', mode === 'hurdle');
+  document.getElementById('btn-place-start').classList.toggle('active', mode === 'start');
+  document.getElementById('btn-place-finish').classList.toggle('active', mode === 'finish');
+  const dockSplit = document.getElementById('dock-combo-split');
+  if (dockSplit) dockSplit.classList.toggle('active', mode === 'comboPreset');
+  updateComboPresetPanel();
+  updateInfoPanel();
+  updateStatus();
+}
+
+/** Rotation buttons in info panel: deg > 0 ⇒ clockwise from above (matches drag-rotate sign). */
+function stepRot(deg) {
+  if (selectedSensor === 'start' && startSensor) {
+    startSensor.rotY = (startSensor.rotY - deg + 360) % 360;
+    syncSensor('start');
+    updatePath();
+    refreshFei();
+    updateInfoPanel();
+    return;
+  }
+  if (selectedSensor === 'finish' && finishSensor) {
+    finishSensor.rotY = (finishSensor.rotY - deg + 360) % 360;
+    syncSensor('finish');
+    updatePath();
+    refreshFei();
+    updateInfoPanel();
+    return;
+  }
+  const h = findHurdleById(selectedId);
+  if (!h) return;
+  applyHurdleYaw(h, h.rotY - deg);
+  updatePath();
+  updateInfoPanel();
+  refreshFei();
+}
+
+function delSel() {
+  if (selectedSensor === 'start') {
+    startSensor = null;
+    rmSensor('start');
+    selectedSensor = null;
+    updatePath();
+    updateInfoPanel();
+    refreshFei();
+    updateStatus();
+    setSelectionVisuals();
+    return;
+  }
+  if (selectedSensor === 'finish') {
+    finishSensor = null;
+    rmSensor('finish');
+    selectedSensor = null;
+    updatePath();
+    updateInfoPanel();
+    refreshFei();
+    updateStatus();
+    setSelectionVisuals();
+    return;
+  }
+  if (selectedId == null) return;
+  const h = findHurdleById(selectedId);
+  if (!h) return;
+  const grp = comboMembersOf(h);
+  const toRemove = grp ? grp : [h];
+  const rmIds = new Set(toRemove.map((x) => x.id));
+  toRemove.forEach((x) => {
+    rmHurdle(x.id);
+    rmLabel(x.id);
+  });
+  hurdles = hurdles.filter((x) => !rmIds.has(x.id));
+  undoBatchIds = null;
+  selectedId = null;
+  updatePath();
+  updateInfoPanel();
+  refreshFei();
+  updateStatus();
+  setSelectionVisuals();
+  recomputeNextNumFromHurdles();
+  if (!hurdles.length) showOnboard();
+}
+
+function undoLast() {
+  if (!hurdles.length) return;
+  const nBatch = undoBatchIds && undoBatchIds.length;
+  if (nBatch) {
+    const tail = hurdles.slice(-nBatch);
+    const ok = tail.length === nBatch && tail.every((h, i) => h.id === undoBatchIds[i]);
+    if (ok) {
+      for (const h of tail) {
+        rmHurdle(h.id);
+        rmLabel(h.id);
+      }
+      hurdles = hurdles.slice(0, -nBatch);
+      undoBatchIds = null;
+      selectedId = null;
+      comboMode = null;
+      updateComboBtn();
+      updatePath();
+      updateInfoPanel();
+      refreshFei();
+      updateStatus();
+      setSelectionVisuals();
+      recomputeNextNumFromHurdles();
+      if (!hurdles.length) showOnboard();
+      return;
+    }
+  }
+  undoBatchIds = null;
+  const last = hurdles.pop();
+  rmHurdle(last.id);
+  rmLabel(last.id);
+  updatePath();
+  comboMode = null;
+  if (selectedId === last.id) selectedId = null;
+  updateInfoPanel();
+  refreshFei();
+  updateStatus();
+  updateComboBtn();
+  setSelectionVisuals();
+  recomputeNextNumFromHurdles();
+  if (hurdles.length === 0) showOnboard();
+}
+
+function clearAll() {
+  const has = hurdles.length || startSensor || finishSensor;
+  if (has && !confirm('Clear all hurdles and start/finish sensors?')) return;
+  ms.pendingGroundGrab = null;
+  hurdles.forEach((h) => {
+    rmHurdle(h.id);
+    rmLabel(h.id);
+  });
+  hurdles = [];
+  __idSeq = 0;
+  __cgSeq = 0;
+  rmSensor('start');
+  rmSensor('finish');
+  rmComboGhost();
+  undoBatchIds = null;
+  startSensor = null;
+  finishSensor = null;
+  selectedSensor = null;
+  selectedId = null;
+  comboMode = null;
+  updatePath();
+  updateInfoPanel();
+  refreshFei();
+  updateStatus();
+  updateComboBtn();
+  setSelectionVisuals();
+  updateComboPresetPanel();
+  recomputeNextNumFromHurdles();
+  showOnboard();
+}
+
+function toggleCombo(ev) {
+  if (comboMode) {
+    comboMode = null;
+  } else {
+    const triple = !!(ev && ev.shiftKey);
+    recomputeNextNumFromHurdles();
+    comboMode = { num: nextNum, suffix: 'a', triple, groupId: null };
+    setPlaceMode('hurdle');
+  }
+  updateComboBtn();
+  updateStatus();
+}
+
+function updateComboBtn() {
+  const b = document.getElementById('btn-combo');
+  if (b) b.classList.toggle('active', !!comboMode);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// UI updates
+// ═══════════════════════════════════════════════════════════════════════
+function updateInfoPanel() {
+  const railCourse = document.getElementById('rail-course-params');
+  const railIns = document.getElementById('rail-inspector');
+  const info = document.getElementById('info');
+  const labelEl = document.getElementById('info-label');
+  const orderEl = document.getElementById('info-order');
+  const h = hurdles.find((x) => x.id === selectedId);
+  let data = null;
+
+  const hasSelection =
+    (selectedSensor === 'start' && startSensor)
+    || (selectedSensor === 'finish' && finishSensor)
+    || !!h;
+
+  if (!hasSelection) {
+    if (railCourse) railCourse.classList.remove('hidden');
+    if (railIns) railIns.classList.add('hidden');
+    info.classList.add('inspector-empty');
+    info.classList.add('show');
+    labelEl.textContent = 'Selection';
+    document.getElementById('info-num').textContent = '—';
+    orderEl.textContent = '—';
+    orderEl.style.color = 'var(--text-dim)';
+    document.getElementById('info-x').textContent = '—';
+    document.getElementById('info-z').textContent = '—';
+    document.getElementById('info-rot').textContent = '—';
+    return;
+  }
+
+  if (railCourse) railCourse.classList.add('hidden');
+  if (railIns) railIns.classList.remove('hidden');
+  info.classList.remove('inspector-empty');
+  info.classList.add('show');
+
+  if (selectedSensor === 'start' && startSensor) {
+    data = startSensor;
+    labelEl.textContent = 'Gate';
+    document.getElementById('info-num').textContent = 'START';
+    orderEl.textContent = 'Sensor';
+    orderEl.style.color = 'var(--text)';
+  } else if (selectedSensor === 'finish' && finishSensor) {
+    data = finishSensor;
+    labelEl.textContent = 'Gate';
+    document.getElementById('info-num').textContent = 'FINISH';
+    orderEl.textContent = 'Sensor';
+    orderEl.style.color = 'var(--text)';
+  } else if (h) {
+    labelEl.textContent = 'Hurdle';
+    document.getElementById('info-num').textContent = h.label;
+    orderEl.textContent = `${hurdles.indexOf(h) + 1}/${hurdles.length}`;
+    orderEl.style.color = 'var(--text)';
+    data = { x: h.x, z: h.z, rotY: h.rotY };
+  }
+
+  document.getElementById('info-x').textContent = data.x.toFixed(1) + 'm';
+  document.getElementById('info-z').textContent = data.z.toFixed(1) + 'm';
+  document.getElementById('info-rot').textContent = Math.round(data.rotY) + '°';
+}
+
+function toggleSidebarLeft() {
+  const bar = document.getElementById('sidebar-left');
+  const btn = document.getElementById('sidebar-left-toggle');
+  if (!bar || !btn) return;
+  bar.classList.toggle('collapsed');
+  const c = bar.classList.contains('collapsed');
+  btn.textContent = c ? '▶' : '◀';
+  btn.setAttribute('aria-expanded', c ? 'false' : 'true');
+  localStorage.setItem('parkoursV2SidebarLeftCollapsed', c ? '1' : '0');
+}
+
+function updateStatus() {
+  const s = document.getElementById('status');
+  if (comboMode) {
+    const kind = comboMode.triple ? 'triple' : 'double';
+    s.innerHTML = `Combo (${kind}) · place <span class="accent">${comboMode.num}${comboMode.suffix}</span>`;
+  } else if (placeMode === 'comboPreset' && comboPresetConfig) {
+    const kind = comboPresetConfig.type === 'triple' ? 'Triple' : 'Double';
+    const last = comboPresetConfig.type === 'triple' ? 'c' : 'b';
+    s.innerHTML = `${kind} · <span class="accent">${nextNum}a–${nextNum}${last}</span> · ${comboPresetConfig.spacingM} m · click arena`;
+  } else if (placeMode === 'start') {
+    s.innerHTML = `Place <span class="accent">start</span> · click arena (one only)`;
+  } else if (placeMode === 'finish') {
+    s.innerHTML = `Place <span class="accent">finish</span> · click arena (one only)`;
+  } else if (selectedId != null) {
+    const h = hurdles.find((x) => x.id === selectedId);
+    if (h) s.innerHTML = `Hurdle <span class="accent">${h.label}</span> · drag to move · teal arrow rotates`;
+  } else if (selectedSensor === 'start') {
+    s.innerHTML = `Start gate · drag to move · arrow rotates`;
+  } else if (selectedSensor === 'finish') {
+    s.innerHTML = `Finish gate · drag to move · arrow rotates`;
+  } else if (placeMode === 'adjust') {
+    s.innerHTML = `Adjust · click a hurdle to select · drag to move · teal arrow rotates`;
+  } else {
+    s.innerHTML = `Click arena to place hurdle <span class="accent">${nextNum}</span>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FEI metrics + validation
+// ═══════════════════════════════════════════════════════════════════════
+function hypot(dx, dz) { return Math.sqrt(dx * dx + dz * dz); }
+
+/** Path tangent at each knot matches that marker’s jump arrow (XZ): hurdles (loodrecht), start, and finish all align with their cyan arrows. */
+function ridingPathKnotUnitTangent(knots, i) {
+  return jumpForwardUnitXZ(knots[i].rotY);
+}
+
+function ridingPathTangentDirections(knots) {
+  const t = [];
+  for (let i = 0; i < knots.length; i++) t.push(ridingPathKnotUnitTangent(knots, i));
+  return t;
+}
+
+function sampleBezierWithEndTangents(A, B, mA, mB, segs) {
+  const p0 = { x: A.x, z: A.z };
+  const p3 = { x: B.x, z: B.z };
+  const dx = B.x - A.x;
+  const dz = B.z - A.z;
+  const chord = hypot(dx, dz);
+  if (chord < 1e-6) return [{ ...p0 }, { ...p3 }];
+  const L = PATH_BEZIER_HANDLE_FRAC * chord;
+  const p1 = { x: A.x + L * mA.x, z: A.z + L * mA.z };
+  const p2 = { x: B.x - L * mB.x, z: B.z - L * mB.z };
+  const pts = [];
+  for (let i = 0; i <= segs; i++) {
+    const u = i / segs;
+    const omt = 1 - u;
+    const x = omt * omt * omt * p0.x + 3 * omt * omt * u * p1.x + 3 * omt * u * u * p2.x + u * u * u * p3.x;
+    const z = omt * omt * omt * p0.z + 3 * omt * omt * u * p1.z + 3 * omt * u * u * p2.z + u * u * u * p3.z;
+    pts.push({ x, z });
+  }
+  return pts;
+}
+
+function ridingPathSegmentArcLengths() {
+  const knots = getRidingPathKnots();
+  const lens = [];
+  if (knots.length < 2) return lens;
+  const tangents = ridingPathTangentDirections(knots);
+  for (let i = 0; i < knots.length - 1; i++) {
+    const samples = sampleBezierWithEndTangents(knots[i], knots[i + 1], tangents[i], tangents[i + 1], PATH_BEZIER_SAMPLES_PER_SEG);
+    let len = 0;
+    for (let j = 1; j < samples.length; j++) {
+      len += hypot(samples[j].x - samples[j - 1].x, samples[j].z - samples[j - 1].z);
+    }
+    lens.push(len);
+  }
+  return lens;
+}
+
+/** Ordered path knots with rotations (start → hurdles → finish / closure). */
+function getRidingPathKnots() {
+  if (!hurdles.length) return [];
+  const knots = [];
+  if (startSensor) knots.push({ x: startSensor.x, z: startSensor.z, rotY: startSensor.rotY, kind: 'start' });
+  hurdles.forEach((h) => knots.push({ x: h.x, z: h.z, rotY: h.rotY, kind: 'hurdle' }));
+  if (finishSensor) {
+    knots.push({ x: finishSensor.x, z: finishSensor.z, rotY: finishSensor.rotY, kind: 'finish' });
+  } else if (hurdles.length > 1) {
+    const h0 = hurdles[0];
+    knots.push({ x: h0.x, z: h0.z, rotY: h0.rotY, kind: 'hurdle' });
+  } else if (hurdles.length === 1 && startSensor) {
+    knots.push({ x: startSensor.x, z: startSensor.z, rotY: startSensor.rotY, kind: 'start' });
+  }
+  return knots;
+}
+
+function ridingPathBezierPolyline() {
+  const knots = getRidingPathKnots();
+  if (knots.length < 2) return [];
+  const tangents = ridingPathTangentDirections(knots);
+  const out = [];
+  for (let i = 0; i < knots.length - 1; i++) {
+    const chunk = sampleBezierWithEndTangents(knots[i], knots[i + 1], tangents[i], tangents[i + 1], PATH_BEZIER_SAMPLES_PER_SEG);
+    if (i === 0) out.push(...chunk);
+    else out.push(...chunk.slice(1));
+  }
+  return out;
+}
+
+function ridingPathPts() {
+  return getRidingPathKnots().map((k) => ({ x: k.x, z: k.z }));
+}
+
+function ridingPathDistM() {
+  const poly = ridingPathBezierPolyline();
+  let d = 0;
+  for (let i = 1; i < poly.length; i++) {
+    d += hypot(poly[i].x - poly[i - 1].x, poly[i].z - poly[i - 1].z);
+  }
+  return d;
+}
+
+function bezierPathValidationIssues3d() {
+  const knots = getRidingPathKnots();
+  const out = [];
+  if (knots.length < 2) return out;
+  const BAD = Math.cos((115 * Math.PI) / 180);
+  const toDeg = (rad) => rad * (180 / Math.PI);
+  const tangents = ridingPathTangentDirections(knots);
+
+  for (let i = 0; i < knots.length - 1; i++) {
+    const A = knots[i];
+    const B = knots[i + 1];
+    const dx = B.x - A.x;
+    const dz = B.z - A.z;
+    const chord = hypot(dx, dz);
+    if (chord < 0.05) {
+      out.push({
+        level: 'invalid',
+        msg: `Path segment ${i + 1}: consecutive gates/obstacles are too close to form a smooth curve.`,
+        fix: 'Move points apart along the ring.',
+      });
+      continue;
+    }
+    const cnx = dx / chord;
+    const cnz = dz / chord;
+    const uOut = jumpForwardUnitXZ(A.rotY);
+    const dotExit = uOut.x * cnx + uOut.z * cnz;
+    if (dotExit < BAD) {
+      out.push({
+        level: 'invalid',
+        msg: `Segment ${i + 1}: jump exit (arrow) faces away from the next path point — curve would fold back.`,
+        fix: 'Rotate so the arrow aims toward the next fence or gate.',
+      });
+    }
+
+    const samples = sampleBezierWithEndTangents(A, B, tangents[i], tangents[i + 1], PATH_BEZIER_SAMPLES_PER_SEG);
+    let maxKink = 0;
+    for (let j = 1; j < samples.length - 1; j++) {
+      const ax = samples[j].x - samples[j - 1].x;
+      const az = samples[j].z - samples[j - 1].z;
+      const bx = samples[j + 1].x - samples[j].x;
+      const bz = samples[j + 1].z - samples[j].z;
+      const la = hypot(ax, az);
+      const lb = hypot(bx, bz);
+      if (la < 1e-4 || lb < 1e-4) continue;
+      const dot = (ax * bx + az * bz) / (la * lb);
+      const ang = Math.acos(Math.max(-1, Math.min(1, dot)));
+      maxKink = Math.max(maxKink, ang);
+    }
+    if (maxKink > (140 * Math.PI) / 180) {
+      out.push({
+        level: 'invalid',
+        msg: `Segment ${i + 1}: smoothed path kinks ~${toDeg(maxKink).toFixed(0)}° (overshoot / harsh bend).`,
+        fix: 'Adjust positions and rotations for a gentler line.',
+      });
+    }
+  }
+  return out;
+}
+
+function parseObstacleLabel3d(label) {
+  const s = String(label ?? '').trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+  const m = /^(\d+)\s*([abc])?$/i.exec(s);
+  if (!m) return null;
+  return { num: parseInt(m[1], 10), suffix: (m[2] || '').toLowerCase() };
+}
+
+/** Next obstacle index for new fences: max parsed FEI base number on course + 1, or 1 when empty. */
+function recomputeNextNumFromHurdles() {
+  let maxN = 0;
+  for (const h of hurdles) {
+    const p = parseObstacleLabel3d(h.label);
+    if (p && Number.isFinite(p.num)) maxN = Math.max(maxN, p.num);
+  }
+  nextNum = maxN > 0 ? maxN + 1 : 1;
+}
+
+function groupHurdlesIntoObstacles3d(list) {
+  const groups = [];
+  let i = 0;
+  while (i < list.length) {
+    const p = parseObstacleLabel3d(list[i].label);
+    if (!p) {
+      groups.push([list[i]]);
+      i++;
+      continue;
+    }
+    const base = p.num;
+    let j = i;
+    while (j + 1 < list.length) {
+      const p2 = parseObstacleLabel3d(list[j + 1].label);
+      if (!p2 || p2.num !== base) break;
+      j++;
+    }
+    groups.push(list.slice(i, j + 1));
+    i = j + 1;
+  }
+  return groups;
+}
+
+function feiTotalsFromGroups3d(groups) {
+  let singles = 0, doubles = 0, triples = 0, efforts = 0;
+  let invalidCombo = false;
+  for (const g of groups) {
+    efforts += g.length;
+    if (g.length === 1) singles++;
+    else if (g.length === 2) doubles++;
+    else if (g.length === 3) triples++;
+    else invalidCombo = true;
+  }
+  return { obstacleCount: groups.length, efforts, singles, doubles, triples, invalidCombo };
+}
+
+function comboSpacingIssues3d(groups) {
+  const out = [];
+  groups.forEach((g, gi) => {
+    if (g.length < 2) return;
+    for (let k = 0; k < g.length - 1; k++) {
+      const a = g[k], b = g[k + 1];
+      const d = hypot(b.x - a.x, b.z - a.z);
+      if (d < 7 || d > 11) {
+        out.push({
+          level: 'warn',
+          msg: `Combination ${gi + 1}: ~${d.toFixed(1)} m between elements (typical ~7–11 m).`,
+          fix: 'Adjust spacing between combination elements when possible.',
+        });
+      }
+    }
+  });
+  return out;
+}
+
+function sharpTurnIssues3d(pts, minTurnDeg = 38) {
+  const out = [];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const ax = pts[i].x - pts[i - 1].x, az = pts[i].z - pts[i - 1].z;
+    const bx = pts[i + 1].x - pts[i].x, bz = pts[i + 1].z - pts[i].z;
+    const la = hypot(ax, az), lb = hypot(bx, bz);
+    if (la < 0.5 || lb < 0.5) continue;
+    const dot = (ax * bx + az * bz) / (la * lb);
+    const ang = Math.acos(Math.max(-1, Math.min(1, dot))) * (180 / Math.PI);
+    if (ang < minTurnDeg) {
+      out.push({
+        level: 'warn',
+        msg: `Sharp bend (~${ang.toFixed(0)}°) along the path near point ${i + 1}.`,
+        fix: 'Widen the track so horses can balance between fences.',
+      });
+    }
+  }
+  return out;
+}
+
+function wallProximityIssues3d(pts, aw, ah, minClearM = 2.8) {
+  const hw = aw / 2, hh = ah / 2;
+  const out = [];
+  pts.forEach((p, i) => {
+    const clear = Math.min(hw - Math.abs(p.x), hh - Math.abs(p.z));
+    if (clear < minClearM) {
+      out.push({
+        level: 'warn',
+        msg: `Path point ${i + 1} is ~${clear.toFixed(1)} m inside the rail.`,
+        fix: 'Keep more margin from the arena edge.',
+      });
+    }
+  });
+  return out;
+}
+
+function approachLandingIssues3dFromArcLens(segs, hasStart, hasFinish) {
+  if (segs.length < 1) return [];
+  const n = segs.length;
+  const out = [];
+  if (hasStart && n >= 1 && segs[0] < 12) {
+    out.push({
+      level: 'warn',
+      msg: `Approach to the first obstacle is ~${segs[0].toFixed(1)} m along the smoothed path.`,
+      fix: 'Move the start farther back on the line to fence 1.',
+    });
+  }
+  for (let i = 1; i < n - 1; i++) {
+    if (segs[i] < 10) {
+      out.push({
+        level: 'warn',
+        msg: `Riding segment ${i + 1} is ~${segs[i].toFixed(1)} m along the smoothed path.`,
+        fix: 'Lengthen the line between those obstacles.',
+      });
+    }
+  }
+  if (hasFinish && n >= 1) {
+    const last = segs[n - 1];
+    if (last < 8) {
+      out.push({
+        level: 'warn',
+        msg: `Only ~${last.toFixed(1)} m from last obstacle to finish along the smoothed path.`,
+        fix: 'Place the finish farther along the getaway.',
+      });
+    }
+  }
+  return out;
+}
+
+function computeFeiBundle3d() {
+  const speed = Math.max(0, +document.getElementById('p-speed').value || 0);
+  const heightM = +document.getElementById('p-height').value || 0;
+  const groups = groupHurdlesIntoObstacles3d(hurdles);
+  const totals = feiTotalsFromGroups3d(groups);
+  const lengthM = ridingPathDistM();
+  const timeAllowedSec = speed > 0 && lengthM > 0 ? Math.round((lengthM / speed) * 60) : 0;
+  const timeLimitSec = timeAllowedSec > 0 ? Math.round(timeAllowedSec * 2) : 0;
+  const pathSamples = ridingPathBezierPolyline();
+  const segArcLens = ridingPathSegmentArcLengths();
+  const issues = [];
+  const hasCourse = hurdles.length > 0;
+
+  if (!hasCourse) {
+    return {
+      hasCourse: false, lengthM, speed, heightM, timeAllowedSec: 0, timeLimitSec: 0,
+      ...totals, issues, overall: null,
+    };
+  }
+
+  if (!speed) {
+    issues.push({ level: 'invalid', msg: 'Speed must be positive (m/min).', fix: 'Pick a preset or enter a custom speed.' });
+  }
+  if (lengthM <= 0) {
+    issues.push({ level: 'invalid', msg: 'Path length is zero.', fix: 'Place multiple points along the riding line.' });
+  }
+  if (!Number.isFinite(heightM) || document.getElementById('p-height').value === '') {
+    issues.push({ level: 'invalid', msg: 'Height must be a number.', fix: 'Enter obstacle height in meters.' });
+  } else if (heightM < 0.3 || heightM > 1.6) {
+    issues.push({
+      level: 'invalid',
+      msg: `Height ${heightM.toFixed(2)} m is outside 0.30–1.60 m project limits.`,
+      fix: 'Adjust height for simulator compatibility.',
+    });
+  }
+  if (totals.invalidCombo) {
+    issues.push({
+      level: 'invalid',
+      msg: 'A combination has more than three elements.',
+      fix: 'Use doubles or triples only in this designer.',
+    });
+  }
+
+  hurdles.forEach((h) => {
+    if (!parseObstacleLabel3d(h.label)) {
+      issues.push({
+        level: 'warn',
+        msg: `"${h.label}" is not FEI-style numbering.`,
+        fix: 'Use digits with optional a/b/c suffix.',
+      });
+    }
+  });
+
+  issues.push(...comboSpacingIssues3d(groups));
+  issues.push(...bezierPathValidationIssues3d());
+  if (pathSamples.length >= 3) {
+    issues.push(...sharpTurnIssues3d(pathSamples));
+    issues.push(...wallProximityIssues3d(pathSamples, arenaW, arenaH));
+  }
+  if (segArcLens.length >= 1) {
+    issues.push(...approachLandingIssues3dFromArcLens(segArcLens, !!startSensor, !!finishSensor));
+  }
+
+  let overall = 'valid';
+  if (issues.some((x) => x.level === 'invalid')) overall = 'invalid';
+  else if (issues.some((x) => x.level === 'warn')) overall = 'risky';
+
+  return {
+    hasCourse: true,
+    ...totals,
+    lengthM, speed, heightM,
+    timeAllowedSec, timeLimitSec,
+    issues, overall,
+  };
+}
+
+/** Riding-order refs for validation auto-fix (no duplicate closure knot). */
+function ridingPathMutationRefs() {
+  const out = [];
+  if (startSensor) out.push({ tag: 'start', ref: startSensor });
+  hurdles.forEach((h) => out.push({ tag: 'hurdle', ref: h }));
+  if (finishSensor) out.push({ tag: 'finish', ref: finishSensor });
+  return out;
+}
+
+function clampEntityToWallClearance(ref, aw, ah, minClear = 2.8) {
+  const hw = aw / 2, hh = ah / 2;
+  const mx = Math.max(0.01, hw - minClear);
+  const mz = Math.max(0.01, hh - minClear);
+  ref.x = Math.max(-mx, Math.min(mx, ref.x));
+  ref.z = Math.max(-mz, Math.min(mz, ref.z));
+}
+
+function syncAllHurdleLabelTexts() {
+  lblMap.forEach((d, id) => {
+    const h = findHurdleById(id);
+    if (h) d.textContent = h.label;
+  });
+}
+
+/** FEI-style labels from placement order; combo groups share one base number (a/b/c…). */
+function applyFeStyleRenumberFromOrder() {
+  let obsNum = 1;
+  const seenCombo = new Set();
+  for (const h of hurdles) {
+    if (h.comboGroupId != null) {
+      if (seenCombo.has(h.comboGroupId)) continue;
+      seenCombo.add(h.comboGroupId);
+      const legs = comboMembersOf(h);
+      if (!legs) {
+        h.label = String(obsNum++);
+        continue;
+      }
+      const sorted = legs.slice().sort((a, b) => (a.comboIndex ?? 0) - (b.comboIndex ?? 0));
+      sorted.forEach((leg, i) => {
+        leg.label = `${obsNum}${String.fromCharCode(97 + i)}`;
+      });
+      obsNum++;
+    } else {
+      h.label = String(obsNum++);
+    }
+  }
+  recomputeNextNumFromHurdles();
+}
+
+function normalizeComboSpacingStep(targetM = 9) {
+  const seen = new Set();
+  for (const h of hurdles) {
+    if (h.comboGroupId == null || seen.has(h.comboGroupId)) continue;
+    seen.add(h.comboGroupId);
+    const legs = comboMembersOf(h);
+    if (!legs || legs.length < 2) continue;
+    const sorted = legs.slice().sort((a, b) => (a.comboIndex ?? 0) - (b.comboIndex ?? 0));
+    let ux = sorted[sorted.length - 1].x - sorted[0].x;
+    let uz = sorted[sorted.length - 1].z - sorted[0].z;
+    let len = hypot(ux, uz);
+    if (len < 1e-3) {
+      const f = jumpForwardUnitXZ(sorted[0].rotY);
+      ux = f.x;
+      uz = f.z;
+      len = 1;
+    } else {
+      ux /= len;
+      uz /= len;
+    }
+    for (let i = 1; i < sorted.length; i++) {
+      sorted[i].x = sorted[i - 1].x + ux * targetM;
+      sorted[i].z = sorted[i - 1].z + uz * targetM;
+    }
+    moveLegsRigid(legs, 0, 0);
+  }
+}
+
+function spreadCoincidentMutationRefs(minChord = 0.06, bump = 1.5) {
+  const refs = ridingPathMutationRefs();
+  for (let i = 0; i < refs.length - 1; i++) {
+    const a = refs[i].ref, b = refs[i + 1].ref;
+    if (hypot(b.x - a.x, b.z - a.z) >= minChord) continue;
+    let ux = b.x - a.x, uz = b.z - a.z;
+    if (hypot(ux, uz) < 1e-6) {
+      ux = 1;
+      uz = 0;
+    } else {
+      const L = hypot(ux, uz);
+      ux /= L;
+      uz /= L;
+    }
+    const dx = ux * bump, dz = uz * bump;
+    const tgt = refs[i + 1];
+    if (tgt.tag === 'hurdle') {
+      const grp = comboMembersOf(tgt.ref);
+      if (grp) moveLegsRigid(grp, dx, dz);
+      else {
+        tgt.ref.x += dx;
+        tgt.ref.z += dz;
+        const p = clampToArena(tgt.ref.x, tgt.ref.z);
+        tgt.ref.x = p.x;
+        tgt.ref.z = p.z;
+        syncTransform(tgt.ref);
+      }
+    } else if (tgt.tag === 'finish') {
+      tgt.ref.x += dx;
+      tgt.ref.z += dz;
+      const p = clampToArena(tgt.ref.x, tgt.ref.z);
+      tgt.ref.x = p.x;
+      tgt.ref.z = p.z;
+      syncSensor('finish');
+    }
+  }
+}
+
+function snapComboYawsFromGeometry() {
+  const seen = new Set();
+  hurdles.forEach((h) => {
+    if (h.comboGroupId == null || seen.has(h.comboGroupId)) return;
+    seen.add(h.comboGroupId);
+    const legs = comboMembersOf(h);
+    if (legs) syncComboFacingRotations(legs);
+  });
+}
+
+function snapSinglesAndStartYawTowardNext() {
+  const refs = ridingPathMutationRefs();
+  for (let i = 0; i < refs.length - 1; i++) {
+    const cur = refs[i].ref, next = refs[i + 1].ref;
+    const dx = next.x - cur.x, dz = next.z - cur.z;
+    const ch = hypot(dx, dz);
+    if (ch < 0.06) continue;
+    const yaw = yawDegFromForwardXZ(dx, dz);
+    if (yaw == null) continue;
+    if (refs[i].tag === 'start') {
+      startSensor.rotY = yaw;
+      syncSensor('start');
+    } else if (refs[i].tag === 'hurdle') {
+      if (comboMembersOf(refs[i].ref)) continue;
+      refs[i].ref.rotY = yaw;
+      syncTransform(refs[i].ref);
+    }
+  }
+}
+
+function nudgeAllRefsInsideWallClearance() {
+  ridingPathMutationRefs().forEach((r) => {
+    clampEntityToWallClearance(r.ref, arenaW, arenaH, 2.8);
+    if (r.tag === 'hurdle') syncTransform(r.ref);
+    else syncSensor(r.tag);
+  });
+}
+
+function fixAllCourseValidation() {
+  if (!hurdles.length) return;
+  if (!confirm('Apply automatic fixes? Obstacle numbers will follow riding order; combos, arrows, and positions may shift.')) return;
+
+  const speedEl = document.getElementById('p-speed');
+  const heightEl = document.getElementById('p-height');
+  let spd = Math.max(0, +speedEl.value || 0);
+  if (spd <= 0) {
+    speedEl.value = '350';
+  }
+  let hgt = +heightEl.value;
+  if (!Number.isFinite(hgt) || String(heightEl.value ?? '').trim() === '') {
+    heightEl.value = '1.20';
+    hgt = 1.2;
+  } else {
+    const c = Math.round(Math.min(1.6, Math.max(0.3, hgt)) / 0.05) * 0.05;
+    heightEl.value = String(+c.toFixed(2));
+    hgt = c;
+  }
+
+  applyFeStyleRenumberFromOrder();
+  normalizeComboSpacingStep(9);
+  spreadCoincidentMutationRefs();
+  nudgeAllRefsInsideWallClearance();
+  snapComboYawsFromGeometry();
+  snapSinglesAndStartYawTowardNext();
+  snapComboYawsFromGeometry();
+
+  updatePath();
+  syncAllHurdleLabelTexts();
+  syncSpeedChipUI();
+  refreshFei();
+  updateInfoPanel();
+  updateParallelHints();
+  updateStatus();
+
+  const fe = computeFeiBundle3d();
+  const st = document.getElementById('status');
+  if (st) {
+    st.innerHTML = fe.issues.length === 0
+      ? '<span class="accent">Auto-fix:</span> validation clear — review the course in 3D.'
+      : `<span class="accent">Auto-fix:</span> ${fe.issues.length} note(s) left — adjust fences or start/finish manually.`;
+  }
+}
+
+function syncSpeedChipUI() {
+  const v = +document.getElementById('p-speed').value;
+  const preset = [350, 375, 400].includes(v) ? v : null;
+  const map = [
+    ['chip-sp-indoor', 350],
+    ['chip-sp-out375', 375],
+    ['chip-sp-out400', 400],
+  ];
+  map.forEach(([id, n]) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('fei-chip-on', preset === n);
+  });
+  const c = document.getElementById('chip-sp-custom');
+  if (c) c.classList.toggle('fei-chip-on', preset === null);
+}
+
+function setSpeedPreset3d(n) {
+  document.getElementById('p-speed').value = n;
+  refreshFei();
+}
+
+function focusSpeedCustom() {
+  document.getElementById('p-speed').focus();
+  refreshFei();
+}
+
+function touchSpeedInput() { refreshFei(); }
+
+function renderFeiPanel() {
+  const fe = computeFeiBundle3d();
+  const emptyEl = document.getElementById('fei-empty');
+  const bodyEl = document.getElementById('fei-body');
+  if (!emptyEl || !bodyEl) return;
+
+  if (!fe.hasCourse) {
+    emptyEl.style.display = 'block';
+    bodyEl.style.display = 'none';
+    syncSpeedChipUI();
+    return;
+  }
+  emptyEl.style.display = 'none';
+  bodyEl.style.display = 'block';
+  syncSpeedChipUI();
+
+  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  set('fei-v-speed', fe.speed > 0 ? String(fe.speed) : '—');
+  set('fei-v-length', fe.lengthM > 0 ? fe.lengthM.toFixed(1) : '0');
+  set('fei-v-ta', fe.timeAllowedSec > 0 ? String(fe.timeAllowedSec) : '—');
+  set('fei-v-tl', fe.timeLimitSec > 0 ? String(fe.timeLimitSec) : '—');
+  set('fei-v-obs', String(fe.obstacleCount));
+  set('fei-v-eff', String(fe.efforts));
+  set('fei-v-singles', String(fe.singles));
+  set('fei-v-doubles', String(fe.doubles));
+  set('fei-v-triples', String(fe.triples));
+  set('fei-v-tobs', String(fe.obstacleCount));
+  set('fei-v-teff', String(fe.efforts));
+
+  const badge = document.getElementById('fei-val-status');
+  const issuesHost = document.getElementById('fei-issues');
+  const okLine = document.getElementById('fei-issues-ok');
+  if (badge) {
+    badge.classList.remove('fei-val-valid', 'fei-val-risky', 'fei-val-invalid');
+    if (fe.overall === 'invalid') {
+      badge.classList.add('fei-val-invalid');
+      badge.textContent = 'Invalid';
+    } else if (fe.overall === 'risky') {
+      badge.classList.add('fei-val-risky');
+      badge.textContent = 'Risky';
+    } else {
+      badge.classList.add('fei-val-valid');
+      badge.textContent = 'Valid';
+    }
+  }
+  if (issuesHost) {
+    issuesHost.innerHTML = fe.issues.length
+      ? fe.issues.map((it) => {
+        const cls = it.level === 'invalid' ? 'bad' : 'warn';
+        const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        return `<div class="fei-issue ${cls}"><div>${esc(it.msg)}</div><div class="fei-fix"><strong>Fix:</strong> ${esc(it.fix)}</div></div>`;
+      }).join('')
+      : '';
+  }
+  if (okLine) okLine.style.display = fe.issues.length ? 'none' : 'block';
+
+  const fixWrap = document.getElementById('fei-fixall-wrap');
+  const fixBtn = document.getElementById('fei-fixall-btn');
+  if (fixWrap && fixBtn) {
+    fixWrap.hidden = !fe.hasCourse;
+    fixBtn.disabled = fe.issues.length === 0;
+  }
+}
+
+function refreshFei() {
+  updateStats();
+  renderFeiPanel();
+}
+
+function updateStats() {
+  const elN = document.getElementById('stat-nums');
+  const elE = document.getElementById('stat-eff');
+  const elD = document.getElementById('stat-dist');
+  if (!hurdles.length) {
+    if (elD) elD.textContent = '0m';
+    if (elN) elN.textContent = '—';
+    if (elE) elE.textContent = '—';
+    return;
+  }
+  const pts = ridingPathPts();
+  const groups = groupHurdlesIntoObstacles3d(hurdles);
+  const t = feiTotalsFromGroups3d(groups);
+  if (elN) elN.textContent = String(t.obstacleCount);
+  if (elE) elE.textContent = overlayEffVisible ? String(t.efforts) : '—';
+  if (pts.length < 2) {
+    if (elD) elD.textContent = '—';
+    return;
+  }
+  const dist = ridingPathDistM();
+  if (elD) elD.textContent = (dist > 0 ? Math.round(dist) : 0) + 'm';
+}
+
+function showOnboard() { document.getElementById('onboard').style.display = 'block'; }
+function hideOnboard() { document.getElementById('onboard').style.display = 'none'; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Export — JSON (preserved schema for Unity import)
+// ═══════════════════════════════════════════════════════════════════════
+function buildExportData() {
+  const fe = computeFeiBundle3d();
+  const speed = +document.getElementById('p-speed').value;
+  const hgt = +document.getElementById('p-height').value;
+  const o = {
+    courseInfo: {
+      name: document.getElementById('course-name').value,
+      arenaSize: `${arenaW}x${arenaH}m`,
+      speed_m_per_min: Number.isFinite(speed) ? speed : 0,
+      length_m: fe.hasCourse && fe.lengthM > 0 ? +fe.lengthM.toFixed(2) : 0,
+      timeAllowed_sec: fe.timeAllowedSec || 0,
+      obstacleHeight_m: Number.isFinite(hgt) ? hgt : 0,
+      totalObstacles: fe.hasCourse ? fe.obstacleCount : 0,
+    },
+    hurdles: hurdles.map((h, i) => ({
+      order: i + 1,
+      label: h.label,
+      unityPosition: { x: +h.x.toFixed(2), y: 0, z: +h.z.toFixed(2) },
+      rotationY: Math.round(h.rotY),
+    })),
+  };
+  if (startSensor) {
+    o.startSensor = {
+      unityPosition: { x: +startSensor.x.toFixed(2), y: 0, z: +startSensor.z.toFixed(2) },
+      rotationY: Math.round(startSensor.rotY),
+    };
+  }
+  if (finishSensor) {
+    o.finishSensor = {
+      unityPosition: { x: +finishSensor.x.toFixed(2), y: 0, z: +finishSensor.z.toFixed(2) },
+      rotationY: Math.round(finishSensor.rotY),
+    };
+  }
+  return o;
+}
+
+function syntaxHighlight(json) {
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, (m) => {
+    let cls = 'n';
+    if (/^"/.test(m)) cls = /:$/.test(m) ? 'k' : 's';
+    return `<span class="${cls}">${m}</span>`;
+  });
+}
+
+function doExport() {
+  const data = buildExportData();
+  const json = JSON.stringify(data, null, 2);
+  document.getElementById('modal-pre').innerHTML = syntaxHighlight(json);
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+function doCopy() {
+  const data = buildExportData();
+  const text = JSON.stringify(data, null, 2);
+  const b = document.getElementById('copy-btn');
+  const ok = () => {
+    b.textContent = '✓ Copied';
+    b.style.background = '#4ade80';
+    setTimeout(() => { b.textContent = 'Copy to clipboard'; b.style.background = ''; }, 1800);
+  };
+  const fail = () => alert('Could not copy (clipboard blocked). Select the JSON in the box and copy manually, or use Download .json.');
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(ok).catch(fail);
+    return;
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    const done = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (done) ok();
+    else fail();
+  } catch (e) {
+    fail();
+  }
+}
+
+function downloadJson() {
+  const data = buildExportData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (data.courseInfo.name || 'course').replace(/\s+/g, '_') + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Unity WebSocket import — protocol preserved
+// ═══════════════════════════════════════════════════════════════════════
+const UNITY_WS_DEFAULT_PORT = '8765';
+
+function getUnityImportPort() {
+  const el = document.getElementById('unity-ws-port');
+  const raw = (el && el.value.trim()) || localStorage.getItem('unityImportPort') || UNITY_WS_DEFAULT_PORT;
+  localStorage.setItem('unityImportPort', raw);
+  return raw;
+}
+
+function sendCourseToUnity() {
+  const data = buildExportData();
+  const rawName = (data.courseInfo && data.courseInfo.name) ? String(data.courseInfo.name) : 'course';
+  const baseName = rawName.replace(/\s+/g, '_').replace(/[^\w\-]+/g, '') || 'course';
+  const today = new Date().toISOString().slice(0, 10);
+  const relativePath = `Courses/Imports/${today}/${baseName}.json`;
+  const payload = JSON.stringify({
+    type: 'saveCourse',
+    relativePath,
+    jsonText: JSON.stringify(data),
+  });
+  const port = getUnityImportPort();
+  const hint = document.getElementById('unity-import-hint');
+  if (hint) {
+    hint.textContent = 'Connecting…';
+    hint.style.color = 'var(--text-dim)';
+  }
+  let finished = false;
+  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+  const timeoutMs = 10000;
+  const t = setTimeout(() => {
+    if (finished) return;
+    finished = true;
+    try { ws.close(); } catch (e) { /* noop */ }
+    if (hint) {
+      hint.textContent = `Timed out — Tools → Course Import → Start WebSocket Server (port ${port})`;
+      hint.style.color = '#f87171';
+    }
+  }, timeoutMs);
+
+  ws.onopen = () => { try { ws.send(payload); } catch (e) { /* noop */ } };
+  ws.onerror = () => { /* no details in browser */ };
+  ws.onmessage = (e) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(t);
+    let r;
+    try { r = JSON.parse(e.data); }
+    catch (ex) {
+      if (hint) {
+        hint.textContent = 'Invalid JSON reply from Unity';
+        hint.style.color = '#f87171';
+      }
+      try { ws.close(); } catch (err) { /* noop */ }
+      return;
+    }
+    if (hint) {
+      if (r.ok) {
+        hint.textContent = `Saved · ${r.assetPath || ''}`;
+        hint.style.color = '#4ade80';
+      } else {
+        hint.textContent = r.error || 'Import rejected';
+        hint.style.color = '#f87171';
+      }
+    }
+    try { ws.close(); } catch (err) { /* noop */ }
+  };
+  ws.onclose = () => {
+    clearTimeout(t);
+    if (!finished) {
+      finished = true;
+      if (hint && hint.textContent === 'Connecting…') {
+        hint.textContent = `Could not connect to ws://127.0.0.1:${port} — start Unity import server (Tools → Course Import)`;
+        hint.style.color = '#f87171';
+      }
+    }
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PDF plan (orthographic drone view + jsPDF)
+// ═══════════════════════════════════════════════════════════════════════
+function collectPdfHiddenObjects() {
+  const targets = [];
+  const hide = (o) => { if (o) targets.push(o); };
+  if (gGrid) hide(gGrid);
+  if (gBorder) hide(gBorder);
+  if (parallelHintsGroup) hide(parallelHintsGroup);
+  hObjs.forEach((g) => {
+    hide(g.getObjectByName('rotHandle'));
+    hide(g.getObjectByName('ring'));
+    hide(g.getObjectByName('innerRing'));
+  });
+  ['start', 'finish'].forEach((k) => {
+    const o = sensorObjs[k];
+    if (!o) return;
+    hide(o.getObjectByName('sensorRing'));
+    hide(o.getObjectByName('sensorRotHandle'));
+  });
+  return targets;
+}
+
+function runWithPdfSceneStyle(taskFn) {
+  const targets = collectPdfHiddenObjects();
+  const prevVis = targets.map((o) => o.visible);
+  targets.forEach((o) => { o.visible = false; });
+
+  const prevBg = scene.background.clone();
+  scene.background = new THREE.Color(0xffffff);
+
+  let prevGroundHex = null;
+  if (gMesh && gMesh.material && gMesh.material.color) {
+    prevGroundHex = gMesh.material.color.getHex();
+    gMesh.material.color.setHex(0xf7f7f5);
+  }
+
+  let prevPathColor = null;
+  let prevPathOpacity = null;
+  let prevPathLineVisible = null;
+  if (pathLine && pathLine.material) {
+    prevPathLineVisible = pathLine.visible;
+    pathLine.visible = true;
+    prevPathColor = pathLine.material.color.getHex();
+    prevPathOpacity = pathLine.material.opacity;
+    pathLine.material.color.setHex(0x5aa9e8);
+    pathLine.material.opacity = 0.92;
+  }
+
+  try {
+    return taskFn();
+  } finally {
+    targets.forEach((o, i) => { o.visible = prevVis[i]; });
+    scene.background.copy(prevBg);
+    if (prevGroundHex !== null && gMesh && gMesh.material && gMesh.material.color) {
+      gMesh.material.color.setHex(prevGroundHex);
+    }
+    if (pathLine && pathLine.material && prevPathColor !== null) {
+      pathLine.material.color.setHex(prevPathColor);
+      pathLine.material.opacity = prevPathOpacity != null ? prevPathOpacity : pathLine.material.opacity;
+    }
+    if (pathLine && prevPathLineVisible !== null) pathLine.visible = prevPathLineVisible;
+  }
+}
+
+function updateDroneOrthoCam() {
+  const pad = Math.max(arenaW, arenaH) * 0.07 + 2;
+  const halfW = arenaW / 2 + pad;
+  const halfH = arenaH / 2 + pad;
+  if (!droneOrthoCam) {
+    droneOrthoCam = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.5, 500);
+    droneOrthoCam.position.set(0, 120, 0);
+    droneOrthoCam.rotation.x = -Math.PI / 2;
+  } else {
+    droneOrthoCam.left = -halfW;
+    droneOrthoCam.right = halfW;
+    droneOrthoCam.top = halfH;
+    droneOrthoCam.bottom = -halfH;
+    droneOrthoCam.updateProjectionMatrix();
+  }
+  return droneOrthoCam;
+}
+
+function getDroneRenderer(w, h) {
+  if (!droneRenderer) {
+    try {
+      droneRenderer = new THREE.WebGLRenderer({
+        antialias: true, alpha: false, preserveDrawingBuffer: true,
+      });
+    } catch (e1) {
+      try {
+        droneRenderer = new THREE.WebGLRenderer({
+          antialias: false, alpha: false, preserveDrawingBuffer: true,
+        });
+      } catch (e2) {
+        console.error(e2);
+        return null;
+      }
+    }
+    droneRenderer.shadowMap.enabled = true;
+    droneRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    droneRenderer.outputEncoding = THREE.sRGBEncoding;
+  }
+  droneRenderer.setPixelRatio(1);
+  droneRenderer.setSize(w, h);
+  return droneRenderer;
+}
+
+function composeDronePlanImage(droneCam, srcCanvas) {
+  const w = srcCanvas.width;
+  const h = srcCanvas.height;
+  const out = document.createElement('canvas');
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(srcCanvas, 0, 0);
+
+  const padPx = Math.max(14, Math.round(Math.min(w, h) * 0.018));
+  ctx.strokeStyle = '#5c4033';
+  ctx.lineWidth = Math.max(2, Math.round(Math.min(w, h) * 0.004));
+  ctx.strokeRect(
+    padPx + ctx.lineWidth / 2,
+    padPx + ctx.lineWidth / 2,
+    w - padPx * 2 - ctx.lineWidth,
+    h - padPx * 2 - ctx.lineWidth,
+  );
+
+  const scaleMin = Math.min(w, h);
+
+  function drawCaption(text, wx, wz, dy = 0) {
+    const v = new THREE.Vector3(wx, 0, wz);
+    v.project(droneCam);
+    const sx = (v.x * 0.5 + 0.5) * w;
+    const sy = (-v.y * 0.5 + 0.5) * h;
+    const fs = Math.round(scaleMin * 0.026);
+    ctx.font = `bold ${fs}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = Math.max(3, Math.round(scaleMin * 0.004));
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeText(text, sx, sy + dy);
+    ctx.fillStyle = '#111111';
+    ctx.fillText(text, sx, sy + dy);
+  }
+
+  hurdles.forEach((h) => {
+    drawCaption(String(h.label), h.x, h.z, Math.round(-scaleMin * 0.02));
+  });
+  if (startSensor) drawCaption('Start', startSensor.x, startSensor.z, Math.round(scaleMin * 0.03));
+  if (finishSensor) drawCaption('Finish', finishSensor.x, finishSensor.z, Math.round(scaleMin * 0.03));
+
+  return out.toDataURL('image/jpeg', 0.92);
+}
+
+function captureDronePlanDataUrl() {
+  const imgW = 1500;
+  const imgH = Math.max(360, Math.round((imgW * arenaH) / arenaW));
+  const cam = updateDroneOrthoCam();
+  const dr = getDroneRenderer(imgW, imgH);
+  if (!dr || !dr.domElement) throw new Error('Second WebGL view failed (PDF map). Main view should still work.');
+  dr.render(scene, cam);
+  return composeDronePlanImage(cam, dr.domElement);
+}
+
+function formatPdfDate(d) {
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+}
+function formatPdfTime(d) {
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function downloadPdfPlan() {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('PDF library failed to load. Check your network connection and try again.');
+    return;
+  }
+  let dataUrl;
+  try {
+    dataUrl = runWithPdfSceneStyle(() => captureDronePlanDataUrl());
+  } catch (e) {
+    console.error(e);
+    alert('Could not render the course map for PDF.');
+    return;
+  }
+
+  const fe = computeFeiBundle3d();
+  const name = (document.getElementById('course-name').value || 'Course').trim();
+  const speed = fe.speed > 0 ? String(fe.speed) : '—';
+  const lengthStr = fe.lengthM > 0 ? fe.lengthM.toFixed(fe.lengthM >= 100 ? 0 : 1) : '—';
+  const taStr = fe.timeAllowedSec > 0 ? String(fe.timeAllowedSec) : '—';
+  const tlStr = fe.timeLimitSec > 0 ? String(fe.timeLimitSec) : '—';
+  const obsStr = fe.hasCourse ? String(fe.obstacleCount) : '0';
+  const effStr = fe.hasCourse ? String(fe.efforts) : '0';
+  const now = new Date();
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+    const margin = 14;
+
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pw, ph, 'F');
+
+    doc.setTextColor(20, 20, 20);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.text(name, margin, margin + 8);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(70, 70, 70);
+    doc.text('Show jumping course plan', margin, margin + 15);
+
+    const cx = pw / 2;
+    doc.setFontSize(11);
+    doc.text(formatPdfDate(now), cx, margin + 6, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(formatPdfTime(now), cx, margin + 11, { align: 'center' });
+    doc.setFontSize(9);
+    doc.text(`Arena ${arenaW} × ${arenaH} m`, cx, margin + 16.5, { align: 'center' });
+
+    doc.setFontSize(8.5);
+    doc.setTextColor(55, 55, 55);
+    const credit = '3D programming project by\nWiktoria Przykucka';
+    doc.text(credit, pw - margin, margin + 6, { align: 'right' });
+
+    const rowTop = margin + 26;
+    doc.setDrawColor(220, 215, 205);
+    doc.line(margin, rowTop - 2, pw - margin, rowTop - 2);
+
+    const col1 = margin;
+    const col2 = margin + 52;
+    let y = rowTop;
+
+    function pair(leftLabel, leftVal, rightLabel, rightVal) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text(leftLabel, col1, y);
+      doc.text(rightLabel, col2, y);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(25, 25, 25);
+      doc.text(String(leftVal), col1 + 34, y);
+      doc.text(String(rightVal), col2 + 38, y);
+      y += 5.2;
+    }
+
+    pair('Speed', `${speed} m/min`, 'Length', `${lengthStr} m`);
+    pair('Time allowed', `${taStr} s`, 'Time limit', `${tlStr} s`);
+    pair('Obstacles', obsStr, 'Efforts', effStr);
+
+    const mapTop = y + 8;
+    const mapBottom = ph - margin;
+    const mapH = mapBottom - mapTop;
+    const mapW = pw - margin * 2;
+    const imgProps = doc.getImageProperties(dataUrl);
+    const ratio = imgProps.width / imgProps.height;
+    let drawW = mapW;
+    let drawH = drawW / ratio;
+    if (drawH > mapH) {
+      drawH = mapH;
+      drawW = drawH * ratio;
+    }
+    const dx = margin + (mapW - drawW) / 2;
+    doc.addImage(dataUrl, 'JPEG', dx, mapTop, drawW, drawH);
+
+    const safeName = name.replace(/[^\w\-]+/g, '_').slice(0, 48) || 'course';
+    doc.save(`${safeName}_course_plan.pdf`);
+  } catch (e) {
+    console.error(e);
+    alert('Could not build the PDF file.');
+  }
+}
+
+document.getElementById('modal').addEventListener('click', (e) => {
+  if (e.target.id === 'modal') closeModal();
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Resize & loop
+// ═══════════════════════════════════════════════════════════════════════
+function resize() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+let frame = 0;
+function loop() {
+  requestAnimationFrame(loop);
+  tickOrb();
+
+  frame++;
+  if (selectedId != null) {
+    const hh0 = findHurdleById(selectedId);
+    const cg = hh0 ? comboMembersOf(hh0) : null;
+    const pulseList = cg ? cg : (hh0 ? [hh0] : []);
+    for (const leg of pulseList) {
+      const o = hObjs.get(leg.id);
+      if (!o) continue;
+      const r = o.getObjectByName('ring');
+      if (r) r.material.opacity = 0.7 + Math.sin(frame * 0.06) * 0.2;
+    }
+  }
+
+  renderer.render(scene, camera);
+  updateLabels();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Boot
+// ═══════════════════════════════════════════════════════════════════════
+rebuildGround();
+resize();
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(resize).observe(wrap);
+} else {
+  window.addEventListener('resize', resize);
+}
+loop();
+
+setPlaceMode('adjust');
+updateComboPresetPanel();
+updateInfoPanel();
+refreshFei();
+syncOverlayUi();
+
+window.__parkoursBooted = true;
+
+// Subtle camera intro animation
+let introT = 0;
+function intro() {
+  introT += 0.012;
+  if (introT >= 1) return;
+  orb.tTheta = 0.4 + Math.sin(introT * Math.PI) * 0.12;
+  requestAnimationFrame(intro);
+}
+setTimeout(intro, 500);
+
+(function initUnityImportPortField() {
+  const el = document.getElementById('unity-ws-port');
+  const s = localStorage.getItem('unityImportPort');
+  if (el && s) el.value = s;
+})();
+
+(function initSidebarLeftFromStorage() {
+  const bar = document.getElementById('sidebar-left');
+  const btn = document.getElementById('sidebar-left-toggle');
+  if (!bar || !btn) return;
+  if (localStorage.getItem('parkoursV2SidebarLeftCollapsed') === '1') {
+    bar.classList.add('collapsed');
+    btn.textContent = '▶';
+    btn.setAttribute('aria-expanded', 'false');
+  }
+})();
+</script>
+
+</body>
+</html>
