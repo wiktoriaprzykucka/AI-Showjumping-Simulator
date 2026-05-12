@@ -511,7 +511,7 @@ public class HorseAgent : Agent
     // ─────────────────────────────────────────────
     public override void OnActionReceived(ActionBuffers actions)
     {
-        float move = Mathf.Clamp(actions.ContinuousActions[0], -0.3f, 1f);
+        float move = Mathf.Clamp(actions.ContinuousActions[0], 0f, 1f);
         float turn = Mathf.Clamp(actions.ContinuousActions[1], -1f, 1f);
         float jump = actions.ContinuousActions[2];
 
@@ -548,7 +548,7 @@ public class HorseAgent : Agent
 
         // ── Animator ──
         if (animator != null)
-            animator.SetFloat("Speed", Mathf.Abs(move) * moveSpeed);
+            animator.SetFloat("Speed", move * moveSpeed);
 
         // ── Hurdle timer (failure: no progress between hurdles) ──
         hurdleTimer -= Time.fixedDeltaTime;
@@ -611,7 +611,7 @@ public class HorseAgent : Agent
 
         // ───────── PUNISHMENTS ─────────
 
-        // Standing still — use flat magnitude so reversing still counts as moving
+        // Standing still — use flat magnitude so sliding sideways/backward from physics still counts as moving
         Vector3 flatVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         if (flatVel.magnitude < stillThreshold)
             AwardReward(punishStandingStill);
@@ -701,7 +701,7 @@ public class HorseAgent : Agent
     public override void Heuristic(in ActionBuffers actionsOut)
     {
         var a = actionsOut.ContinuousActions;
-        a[0] = Input.GetAxis("Vertical");
+        a[0] = Mathf.Max(0f, Input.GetAxis("Vertical"));
         a[1] = Input.GetAxis("Horizontal");
         a[2] = Input.GetKey(KeyCode.Space) ? 1f : 0f;
     }
