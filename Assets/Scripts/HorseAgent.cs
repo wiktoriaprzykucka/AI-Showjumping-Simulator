@@ -284,6 +284,13 @@ public class HorseAgent : Agent
 
     // ═══════════════════════════════════════════
 
+    protected override void Awake()
+    {
+        base.Awake();
+        if (GetComponent<HorseDriveModeController>() == null)
+            gameObject.AddComponent<HorseDriveModeController>();
+    }
+
     public override void Initialize()
     {
         rb = GetComponent<Rigidbody>();
@@ -701,8 +708,15 @@ public class HorseAgent : Agent
     public override void Heuristic(in ActionBuffers actionsOut)
     {
         var a = actionsOut.ContinuousActions;
-        a[0] = Mathf.Max(0f, Input.GetAxis("Vertical"));
-        a[1] = Input.GetAxis("Horizontal");
+        // Explicit WASD so heuristic mode matches keyboard layout regardless of Input Manager axes.
+        float forward = 0f;
+        if (Input.GetKey(KeyCode.W)) forward += 1f;
+        if (Input.GetKey(KeyCode.S)) forward -= 1f;
+        float turn = 0f;
+        if (Input.GetKey(KeyCode.D)) turn += 1f;
+        if (Input.GetKey(KeyCode.A)) turn -= 1f;
+        a[0] = Mathf.Clamp01(forward);
+        a[1] = Mathf.Clamp(turn, -1f, 1f);
         a[2] = Input.GetKey(KeyCode.Space) ? 1f : 0f;
     }
 

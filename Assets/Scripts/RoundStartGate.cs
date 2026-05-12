@@ -16,14 +16,27 @@ public sealed class RoundStartGate : MonoBehaviour {
     [Tooltip("Keyboard shortcut to begin the round (alongside the on-screen button).")]
     public KeyCode beginRoundKey = KeyCode.Return;
 
+    [Header("Re-open setup (during play)")]
+    [Tooltip("Press during play to pause and open this panel again — switch AI / player, then Begin round. Set to None to disable.")]
+    public KeyCode openSetupKey = KeyCode.F3;
+
     [Tooltip("Shown when paused for round start.")]
     public string title = "Parkour setup";
 
     [Tooltip("Short instructions under the title.")]
     [TextArea(2, 4)] public string body =
-        "Open F2 for the course list, pick a JSON, then press Begin round.\n";
+        "Open F2 for the course list, pick a JSON, then confirm here.\n";
+
+    [Tooltip("When pauseOnPlay is false, this driving mode is applied immediately (no gate UI).")]
+    public HorseDriveMode quickStartMode = HorseDriveMode.AgentModel;
 
     bool _waitingForStart;
+
+    /// <summary>0 = AI, 1 = player (matches <see cref="GUILayout.SelectionGrid"/>).</summary>
+    int _driveModeSelection;
+
+    const int DriveModeAi = 0;
+    const int DriveModePlayer = 1;
 
     GUIStyle _panelStyle;
     GUIStyle _titleStyle;
@@ -35,22 +48,49 @@ public sealed class RoundStartGate : MonoBehaviour {
     public bool SimulationRunning => !_waitingForStart;
 
     void Awake() {
+        _driveModeSelection = quickStartMode == HorseDriveMode.AgentModel ? DriveModeAi : DriveModePlayer;
         if (pauseOnPlay) {
             Time.timeScale = 0f;
             _waitingForStart = true;
         } else {
             _waitingForStart = false;
+            HorseDriveModeSession.SelectedMode = quickStartMode;
+            HorseDriveModeSession.ApplyToAllAgentsInScene();
         }
     }
 
     void Update() {
-        if (!_waitingForStart || beginRoundKey == KeyCode.None) return;
-        if (Input.GetKeyDown(beginRoundKey))
-            BeginRound();
+        if (_waitingForStart) {
+            if (beginRoundKey != KeyCode.None && Input.GetKeyDown(beginRoundKey))
+                BeginRound();
+            return;
+        }
+
+        if (openSetupKey != KeyCode.None && Input.GetKeyDown(openSetupKey))
+            OpenSetupDuringPlay();
+    }
+
+    /// <summary>
+    /// Pauses and shows the setup UI so the player can change drive mode (or confirm). Syncs the
+    /// selection grid from <see cref="HorseDriveModeSession.SelectedMode"/>.
+    /// </summary>
+    public void OpenSetupDuringPlay() {
+        SyncDriveModeSelectionFromSession();
+        PauseForSetup();
+    }
+
+    void SyncDriveModeSelectionFromSession() {
+        _driveModeSelection = HorseDriveModeSession.SelectedMode == HorseDriveMode.AgentModel
+            ? DriveModeAi
+            : DriveModePlayer;
     }
 
     public void BeginRound() {
         if (!_waitingForStart) return;
+        HorseDriveModeSession.SelectedMode = _driveModeSelection == DriveModeAi
+            ? HorseDriveMode.AgentModel
+            : HorseDriveMode.PlayerHeuristic;
+        HorseDriveModeSession.ApplyToAllAgentsInScene();
         Time.timeScale = runTimeScale;
         _waitingForStart = false;
     }
@@ -108,17 +148,25 @@ public sealed class RoundStartGate : MonoBehaviour {
         GUI.depth = 128;
 
         float w = Mathf.Min(480f, Screen.width - 32f);
-        float h = 220f;
+        float h = 300f;
         var card = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
         GUILayout.BeginArea(card, _panelStyle);
         GUILayout.Label(title, _titleStyle);
         GUILayout.Space(6);
-        GUILayout.Label(body.TrimEnd() + '\n', _bodyStyle, GUILayout.Height(72));
+        GUILayout.Label(body.TrimEnd() + '\n', _bodyStyle, GUILayout.Height(56));
+        GUILayout.Space(4);
+        GUILayout.Label("Who drives the horse?", new GUIStyle(_bodyStyle) { fontStyle = FontStyle.Bold, fontSize = 12 });
+        var options = new[] { "AI agent (trained model)", "Player — WASD + Space" };
+        _driveModeSelection = GUILayout.SelectionGrid(_driveModeSelection, options, 1, GUILayout.Height(72));
+        GUILayout.Space(8);
         if (GUILayout.Button("Begin round", _buttonStyle, GUILayout.ExpandWidth(true)))
             BeginRound();
         GUILayout.Space(4);
+        var openKeyHint = openSetupKey != KeyCode.None
+            ? $"<b>{openSetupKey}</b> open this menu in play   ·   "
+            : "";
         GUILayout.Label(
-            $"Keyboard: <b>{beginRoundKey}</b> begins   ·   <b>F2</b> course browser",
+            $"<b>{beginRoundKey}</b> begin   ·   {openKeyHint}<b>F2</b> courses   ·   <b>Tab</b> AI / player   ·   <b>C</b> camera",
             new GUIStyle(_bodyStyle) { fontSize = 11, alignment = TextAnchor.MiddleCenter });
         GUILayout.EndArea();
 
